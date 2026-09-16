@@ -3,11 +3,15 @@
 [![Windows build](https://github.com/idspl/indigo-router-scheduler/actions/workflows/windows-build.yml/badge.svg)](https://github.com/idspl/indigo-router-scheduler/actions/workflows/windows-build.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
+[Download the latest self-contained Windows EXE](https://github.com/idspl/indigo-router-scheduler/releases/latest/download/IndigoRouterScheduler.exe)
+
 Standalone Windows desktop software for importing MikroTik routers from WinBox `.cdb` or legacy `.wbx` files and running scheduled, orderly RouterOS and RouterBOARD upgrades through the RouterOS API.
 
 ## Open source
 
 Indigo Router Scheduler is published by Indigo Data Services Pvt Ltd under the MIT licence. Source, issues and build history are available at <https://github.com/idspl/indigo-router-scheduler>.
+
+Permanent compiled releases and SHA-256 checksums are available on the [GitHub Releases page](https://github.com/idspl/indigo-router-scheduler/releases/latest).
 
 Requirements: Windows 10/11 or Windows Server 2019+, and the .NET 8 SDK when building from source. Run `build-release.cmd` to create a self-contained `win-x64` executable in `release\win-x64`.
 

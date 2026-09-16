@@ -1,0 +1,75 @@
+name: Publish Windows release
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - IndigoRouterScheduler.csproj
+      - .github/workflows/release.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Read application version
+        id: version
+        shell: pwsh
+        run: |
+          [xml]$project = Get-Content IndigoRouterScheduler.csproj
+          $version = [string]$project.Project.PropertyGroup.Version
+          "version=$version" >> $env:GITHUB_OUTPUT
+          "tag=v$version" >> $env:GITHUB_OUTPUT
+
+      - name: Publish self-contained Windows executable
+        shell: pwsh
+        run: |
+          dotnet publish IndigoRouterScheduler.csproj `
+            -c Release `
+            -r win-x64 `
+            --self-contained true `
+            -p:PublishSingleFile=true `
+            -p:IncludeNativeLibrariesForSelfExtract=true `
+            -p:DebugType=None `
+            -p:DebugSymbols=false `
+            -o release/win-x64
+
+      - name: Create SHA-256 checksum
+        shell: pwsh
+        run: |
+          $exe = "release/win-x64/IndigoRouterScheduler.exe"
+          $hash = (Get-FileHash $exe -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  IndigoRouterScheduler.exe" |
+            Set-Content "release/win-x64/IndigoRouterScheduler.exe.sha256.txt"
+
+      - name: Create or update GitHub Release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.version.outputs.tag }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          $exe = "release/win-x64/IndigoRouterScheduler.exe"
+          $checksum = "$exe.sha256.txt"
+
+          gh release view $env:TAG *> $null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload $env:TAG $exe $checksum --clobber
+          }
+          else {
+            gh release create $env:TAG $exe $checksum `
+              --title "Indigo Router Scheduler $env:VERSION" `
+              --notes "Self-contained Windows x64 release. Download IndigoRouterScheduler.exe and verify it with the accompanying SHA-256 checksum."
+          }
