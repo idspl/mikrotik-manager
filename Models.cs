@@ -34,9 +34,9 @@ public sealed class AppSettings
     public int DefaultApiPort { get; set; } = 8728;
     public bool UseApiSsl { get; set; }
     public bool AllowInvalidTlsCertificate { get; set; }
-    public int ConnectTimeoutSeconds { get; set; } = 15;
-    public int ReconnectTimeoutMinutes { get; set; } = 15;
-    public int StableOnlineSeconds { get; set; } = 20;
+    public int ConnectTimeoutSeconds { get; set; } = 120;
+    public int ReconnectTimeoutMinutes { get; set; } = 3;
+    public int StableOnlineSeconds { get; set; } = 10;
     public string UpdateChannel { get; set; } = "stable";
 }
 

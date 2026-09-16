@@ -1,4 +1,4 @@
-# MikroTik Manager 0.1.11
+# MikroTik Manager 0.1.12
 
 [![Windows build](https://github.com/idspl/mikrotik-manager/actions/workflows/windows-build.yml/badge.svg)](https://github.com/idspl/mikrotik-manager/actions/workflows/windows-build.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -18,6 +18,14 @@ Permanent compiled releases and SHA-256 checksums are available on the [GitHub R
 Requirements: Windows 10/11 or Windows Server 2019+, and the .NET 8 SDK when building from source. Run `build-release.cmd` to create a self-contained `win-x64` executable in `release\win-x64`.
 
 Use a test router before production deployment. Router upgrades, reboots and sensitive configuration exports can interrupt services or expose credentials if operated without appropriate controls.
+
+## 0.1.12 defaults and interactive job view
+
+- New installations default to API port **8728**, API-SSL off, self-signed certificates off, a **120-second** connection timeout, a **3-minute** reboot reconnect timeout, a **10-second** stability wait and the **stable** RouterOS update channel.
+- The main router grid remains enabled while checks, backups or upgrades run.
+- Scrolling and row selection continue to work while live status updates arrive.
+- Editable router connection fields are temporarily locked during an operation, and action handlers continue to prevent a second conflicting job.
+- Right-click can select a row during a job, while its action menu remains safely unavailable until the running operation finishes.
 
 ## 0.1.11 MikroTik Manager rebrand
 

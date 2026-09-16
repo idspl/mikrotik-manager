@@ -25,7 +25,7 @@ public sealed class MainForm : Form
     public MainForm()
     {
         _routerContextMenu = new ContextMenuStrip(_components);
-        Text = "MikroTik Manager 0.1.11";
+        Text = "MikroTik Manager 0.1.12";
         Icon = AppIcon.Current;
         Width = 1280;
         Height = 720;
@@ -426,7 +426,7 @@ public sealed class MainForm : Form
     {
         if (e.Button != MouseButtons.Right) return;
         _contextMenuRowValid = false;
-        if (e.RowIndex < 0 || _operationInProgress)
+        if (e.RowIndex < 0)
         {
             _routerGrid.ClearSelection();
             return;
@@ -438,7 +438,7 @@ public sealed class MainForm : Form
         row.Selected = true;
         int columnIndex = e.ColumnIndex >= 0 ? e.ColumnIndex : 0;
         _routerGrid.CurrentCell = row.Cells[columnIndex];
-        _contextMenuRowValid = true;
+        _contextMenuRowValid = !_operationInProgress;
     }
 
     protected override void Dispose(bool disposing)
@@ -640,7 +640,23 @@ public sealed class MainForm : Form
         .ToList();
     private void SaveRouters() { if (!_suspendRouterSaves) _store.SaveRouters(_routers.ToList()); }
     private void SaveAll() { SaveRouters(); _store.SaveJobs(_jobs.ToList()); }
-    private void SetBusy(bool busy, string text) { _operationInProgress = busy; _status.Text = text; _routerGrid.Enabled = !busy; }
+    private void SetBusy(bool busy, string text)
+    {
+        _operationInProgress = busy;
+        _status.Text = text;
+
+        // Keep the grid enabled so operators can scroll and select rows while
+        // status updates arrive. Only editable connection fields are locked.
+        foreach (DataGridViewColumn column in _routerGrid.Columns)
+        {
+            if (column.DataPropertyName is nameof(RouterRecord.Name)
+                or nameof(RouterRecord.Group)
+                or nameof(RouterRecord.Host)
+                or nameof(RouterRecord.ApiPort)
+                or nameof(RouterRecord.Username))
+                column.ReadOnly = busy;
+        }
+    }
     private void ShowError(Exception ex) => MessageBox.Show(ex.Message, Text, MessageBoxButtons.OK, MessageBoxIcon.Error);
 
     private static Button Button(string text, EventHandler click) { var b = new Button { Text = text, AutoSize = true, Height = 28 }; b.Click += click; return b; }
