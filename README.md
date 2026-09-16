@@ -1,25 +1,35 @@
-# Indigo Router Scheduler 0.1.10
+# MikroTik Manager 0.1.11
 
-[![Windows build](https://github.com/idspl/indigo-router-scheduler/actions/workflows/windows-build.yml/badge.svg)](https://github.com/idspl/indigo-router-scheduler/actions/workflows/windows-build.yml)
+[![Windows build](https://github.com/idspl/mikrotik-manager/actions/workflows/windows-build.yml/badge.svg)](https://github.com/idspl/mikrotik-manager/actions/workflows/windows-build.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-[Download the latest self-contained Windows EXE](https://github.com/idspl/indigo-router-scheduler/releases/latest/download/IndigoRouterScheduler.exe)
+[Download the latest self-contained Windows EXE](https://github.com/idspl/mikrotik-manager/releases/latest/download/MikroTikManager.exe)
 
 Standalone Windows desktop software for importing MikroTik routers from WinBox `.cdb` or legacy `.wbx` files and running scheduled, orderly RouterOS and RouterBOARD upgrades through the RouterOS API.
 
+**Made for MikroTik.** MikroTik, RouterOS, RouterBOARD and WinBox are trademarks of MikroTikls SIA. MikroTik Manager is an independent open-source project from Indigo Data Services Pvt Ltd and is not affiliated with, sponsored by or endorsed by MikroTikls SIA.
+
 ## Open source
 
-Indigo Router Scheduler is published by Indigo Data Services Pvt Ltd under the MIT licence. Source, issues and build history are available at <https://github.com/idspl/indigo-router-scheduler>.
+MikroTik Manager is published by Indigo Data Services Pvt Ltd under the MIT licence. Source, issues and build history are available at <https://github.com/idspl/mikrotik-manager>.
 
-Permanent compiled releases and SHA-256 checksums are available on the [GitHub Releases page](https://github.com/idspl/indigo-router-scheduler/releases/latest).
+Permanent compiled releases and SHA-256 checksums are available on the [GitHub Releases page](https://github.com/idspl/mikrotik-manager/releases/latest).
 
 Requirements: Windows 10/11 or Windows Server 2019+, and the .NET 8 SDK when building from source. Run `build-release.cmd` to create a self-contained `win-x64` executable in `release\win-x64`.
 
 Use a test router before production deployment. Router upgrades, reboots and sensitive configuration exports can interrupt services or expose credentials if operated without appropriate controls.
 
+## 0.1.11 MikroTik Manager rebrand
+
+- Renamed the application, executable, project and splash screen to **MikroTik Manager**.
+- Renamed the executable to `MikroTikManager.exe`.
+- Added visible **Made for MikroTik** compatibility branding and trademark attribution.
+- Migrates existing router, settings, schedule and log data from `C:\ProgramData\Indigo Router Scheduler\` to `C:\ProgramData\MikroTik Manager\` without deleting the legacy copy.
+- Existing scheduled tasks created by an older executable should be recreated after installing the renamed executable.
+
 ## 0.1.10 application icon
 
-- Added a dedicated Indigo Router Scheduler router-and-clock icon.
+- Added a dedicated MikroTik Manager router-and-clock icon.
 - Embedded a multi-resolution icon in the Windows executable for Explorer and desktop shortcuts.
 - Applied the icon to the taskbar, main window and application dialogs.
 - Included the editable SVG icon source with the project.
@@ -56,7 +66,7 @@ Use a test router before production deployment. Router upgrades, reboots and sen
 - Added **Remove Selected** with confirmation.
 - Right-click a router for **Check API Status**, **Fetch Current Versions** and **Remove Router**.
 - Removed the WinBox-port field and column. Only the editable RouterOS API port is retained.
-- Added a two-second Indigo Router Scheduler splash screen before the main window opens.
+- Added a two-second MikroTik Manager splash screen before the main window opens.
 
 ## 0.1.6.1 build compatibility fix
 
@@ -91,7 +101,7 @@ The downloaded `.rsc` files and `BackupManifest.csv` contain passwords and other
 - Removed the blocking Windows shell file picker from the Import button.
 - Added a lightweight in-app path window: paste a file path or drag and drop one `.cdb`/`.wbx` file.
 - Added direct drag and drop onto the main application window.
-- Added stage timings to `C:\ProgramData\Indigo Router Scheduler\Logs\import.log`.
+- Added stage timings to `C:\ProgramData\MikroTik Manager\Logs\import.log`.
 - File existence checks, parsing and encrypted saves all run outside the UI thread.
 
 ## 0.1.2 import fixes and WBX support
@@ -140,7 +150,7 @@ The queue stops at the first failed backup, API command, reconnect timeout, Rout
 - WinBox CDB passwords are imported because this CDB format stores them in recoverable form.
 - Imported routers, login passwords, backup passwords and scheduled job definitions are encrypted with Windows DPAPI using the local-machine scope.
 - Passwords are not displayed in the grid and are redacted from application logs.
-- Application data is kept in `C:\ProgramData\Indigo Router Scheduler\`.
+- Application data is kept in `C:\ProgramData\MikroTik Manager\`.
 - Backups created on routers are password encrypted. Their password defaults to that router's imported login password; a random password is generated when the imported password is empty.
 - API-SSL is supported. Plain API port 8728 remains available for existing networks.
 
@@ -159,14 +169,14 @@ build-release.cmd
 The self-contained single-file executable is created at:
 
 ```text
-release\win-x64\IndigoRouterScheduler.exe
+release\win-x64\MikroTikManager.exe
 ```
 
 The target computers do not need .NET installed.
 
 ## First use
 
-1. Start `IndigoRouterScheduler.exe`.
+1. Start `MikroTikManager.exe`.
 2. Open **Settings** and choose API port 8728 or API-SSL port 8729.
 3. Import the WinBox `.cdb` file.
 4. Correct any router that uses a custom API port; imported routers initially use the default API port from Settings.

@@ -1,6 +1,6 @@
 using System.Drawing.Drawing2D;
 
-namespace IndigoRouterScheduler;
+namespace MikroTikManager;
 
 public sealed class SplashForm : Form
 {
@@ -10,7 +10,7 @@ public sealed class SplashForm : Form
     {
         Icon = AppIcon.Current;
         Width = 640;
-        Height = 330;
+        Height = 350;
         StartPosition = FormStartPosition.CenterScreen;
         FormBorderStyle = FormBorderStyle.None;
         ShowInTaskbar = false;
@@ -34,13 +34,17 @@ public sealed class SplashForm : Form
         e.Graphics.FillRectangle(accent, 0, Height - 8, Width, 8);
         using var indigoFont = new Font("Segoe UI", 34, FontStyle.Bold);
         using var productFont = new Font("Segoe UI", 21, FontStyle.Regular);
+        using var brandFont = new Font("Segoe UI", 11, FontStyle.Bold);
         using var detailFont = new Font("Segoe UI", 10, FontStyle.Regular);
+        using var legalFont = new Font("Segoe UI", 8, FontStyle.Regular);
         using var white = new SolidBrush(Color.White);
         using var soft = new SolidBrush(Color.FromArgb(205, 225, 242));
 
-        e.Graphics.DrawString("INDIGO", indigoFont, white, 54, 68);
-        e.Graphics.DrawString("Router Scheduler", productFont, white, 57, 132);
-        e.Graphics.DrawString("API Management  •  Backup  •  Upgrade", detailFont, soft, 60, 188);
-        e.Graphics.DrawString("Version 0.1.10", detailFont, soft, 60, 252);
+        e.Graphics.DrawString("INDIGO", indigoFont, white, 54, 53);
+        e.Graphics.DrawString("MikroTik Manager", productFont, white, 57, 116);
+        e.Graphics.DrawString("MADE FOR MIKROTIK", brandFont, accent, 60, 162);
+        e.Graphics.DrawString("API Management  •  Backup  •  Upgrade", detailFont, soft, 60, 198);
+        e.Graphics.DrawString("Version 0.1.11", detailFont, soft, 60, 247);
+        e.Graphics.DrawString("MikroTik is a trademark of MikroTikls SIA. Independent Indigo project.", legalFont, soft, 60, 286);
     }
 }

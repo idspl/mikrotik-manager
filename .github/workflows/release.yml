@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
     paths:
-      - IndigoRouterScheduler.csproj
+      - MikroTikManager.csproj
       - .github/workflows/release.yml
   workflow_dispatch:
 
@@ -28,7 +28,7 @@ jobs:
         id: version
         shell: pwsh
         run: |
-          [xml]$project = Get-Content IndigoRouterScheduler.csproj
+          [xml]$project = Get-Content MikroTikManager.csproj
           $version = [string]$project.Project.PropertyGroup.Version
           "version=$version" >> $env:GITHUB_OUTPUT
           "tag=v$version" >> $env:GITHUB_OUTPUT
@@ -36,7 +36,7 @@ jobs:
       - name: Publish self-contained Windows executable
         shell: pwsh
         run: |
-          dotnet publish IndigoRouterScheduler.csproj `
+          dotnet publish MikroTikManager.csproj `
             -c Release `
             -r win-x64 `
             --self-contained true `
@@ -49,10 +49,10 @@ jobs:
       - name: Create SHA-256 checksum
         shell: pwsh
         run: |
-          $exe = "release/win-x64/IndigoRouterScheduler.exe"
+          $exe = "release/win-x64/MikroTikManager.exe"
           $hash = (Get-FileHash $exe -Algorithm SHA256).Hash.ToLowerInvariant()
-          "$hash  IndigoRouterScheduler.exe" |
-            Set-Content "release/win-x64/IndigoRouterScheduler.exe.sha256.txt"
+          "$hash  MikroTikManager.exe" |
+            Set-Content "release/win-x64/MikroTikManager.exe.sha256.txt"
 
       - name: Create or update GitHub Release
         shell: pwsh
@@ -61,7 +61,7 @@ jobs:
           TAG: ${{ steps.version.outputs.tag }}
           VERSION: ${{ steps.version.outputs.version }}
         run: |
-          $exe = "release/win-x64/IndigoRouterScheduler.exe"
+          $exe = "release/win-x64/MikroTikManager.exe"
           $checksum = "$exe.sha256.txt"
 
           gh release view $env:TAG *> $null
@@ -70,6 +70,6 @@ jobs:
           }
           else {
             gh release create $env:TAG $exe $checksum `
-              --title "Indigo Router Scheduler $env:VERSION" `
-              --notes "Self-contained Windows x64 release. Download IndigoRouterScheduler.exe and verify it with the accompanying SHA-256 checksum."
+              --title "MikroTik Manager $env:VERSION" `
+              --notes "Self-contained Windows x64 release. Download MikroTikManager.exe and verify it with the accompanying SHA-256 checksum. MikroTik, RouterOS, RouterBOARD and WinBox are trademarks of MikroTikls SIA. This independent Indigo project is not affiliated with, sponsored by or endorsed by MikroTikls SIA."
           }

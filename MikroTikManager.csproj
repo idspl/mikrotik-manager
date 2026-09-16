@@ -5,10 +5,10 @@
     <UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <AssemblyName>IndigoRouterScheduler</AssemblyName>
-    <RootNamespace>IndigoRouterScheduler</RootNamespace>
+    <AssemblyName>MikroTikManager</AssemblyName>
+    <RootNamespace>MikroTikManager</RootNamespace>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>app.ico</ApplicationIcon>
-    <Version>0.1.10</Version>
+    <Version>0.1.11</Version>
   </PropertyGroup>
 </Project>

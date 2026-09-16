@@ -1,6 +1,6 @@
 using System.ComponentModel;
 
-namespace IndigoRouterScheduler;
+namespace MikroTikManager;
 
 public sealed class SortableBindingList<T>(List<T> items) : BindingList<T>(items)
 {

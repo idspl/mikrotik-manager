@@ -1,4 +1,4 @@
-namespace IndigoRouterScheduler;
+namespace MikroTikManager;
 
 public static class WinboxAddressImporter
 {

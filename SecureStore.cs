@@ -3,7 +3,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
 
-namespace IndigoRouterScheduler;
+namespace MikroTikManager;
 
 public sealed class SecureStore
 {
@@ -16,9 +16,33 @@ public sealed class SecureStore
 
     public SecureStore()
     {
-        RootDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "Indigo Router Scheduler");
+        string commonData = Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData);
+        RootDirectory = Path.Combine(commonData, "MikroTik Manager");
         Directory.CreateDirectory(RootDirectory);
         Directory.CreateDirectory(LogDirectory);
+        TryMigrateLegacyData(Path.Combine(commonData, "Indigo Router Scheduler"));
+    }
+
+    private void TryMigrateLegacyData(string legacyDirectory)
+    {
+        if (!Directory.Exists(legacyDirectory)) return;
+        try
+        {
+            foreach (string source in Directory.EnumerateFiles(legacyDirectory, "*", SearchOption.AllDirectories))
+            {
+                string relative = Path.GetRelativePath(legacyDirectory, source);
+                string destination = Path.Combine(RootDirectory, relative);
+                if (File.Exists(destination)) continue;
+                Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
+                File.Copy(source, destination);
+            }
+        }
+        catch (Exception ex)
+        {
+            File.AppendAllText(
+                Path.Combine(LogDirectory, "migration.log"),
+                $"{DateTime.Now:yyyy-MM-dd HH:mm:ss}\tCould not migrate all legacy data: {ex.Message}{Environment.NewLine}");
+        }
     }
 
     public List<RouterRecord> LoadRouters() => LoadProtected<List<RouterRecord>>(RoutersPath) ?? [];
@@ -72,7 +96,7 @@ internal static class Dpapi
             var source = new DataBlob { Size = input.Length, Data = ptr };
             DataBlob target;
             bool ok = protect
-                ? CryptProtectData(ref source, "Indigo Router Scheduler", IntPtr.Zero, IntPtr.Zero, IntPtr.Zero, LocalMachine, out target)
+                ? CryptProtectData(ref source, "MikroTik Manager", IntPtr.Zero, IntPtr.Zero, IntPtr.Zero, LocalMachine, out target)
                 : CryptUnprotectData(ref source, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero, LocalMachine, out target);
             if (!ok) throw new Win32Exception(Marshal.GetLastWin32Error());
             try

@@ -1,6 +1,6 @@
 using System.Text.RegularExpressions;
 
-namespace IndigoRouterScheduler;
+namespace MikroTikManager;
 
 public sealed class UpgradeEngine(SecureStore store, AppSettings settings)
 {

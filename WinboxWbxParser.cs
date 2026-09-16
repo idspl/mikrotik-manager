@@ -1,6 +1,6 @@
 using System.Text;
 
-namespace IndigoRouterScheduler;
+namespace MikroTikManager;
 
 /// <summary>Parser for the legacy WinBox 3 managed-address export (.wbx).</summary>
 public static class WinboxWbxParser

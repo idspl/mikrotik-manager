@@ -1,7 +1,7 @@
 using System.Globalization;
 using System.Text;
 
-namespace IndigoRouterScheduler;
+namespace MikroTikManager;
 
 public sealed class RouterBackupService(AppSettings settings)
 {

@@ -1,4 +1,4 @@
-namespace IndigoRouterScheduler;
+namespace MikroTikManager;
 
 internal static class AppIcon
 {

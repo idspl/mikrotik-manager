@@ -1,7 +1,7 @@
 using System.ComponentModel;
 using System.Diagnostics;
 
-namespace IndigoRouterScheduler;
+namespace MikroTikManager;
 
 public sealed class MainForm : Form
 {
@@ -25,7 +25,7 @@ public sealed class MainForm : Form
     public MainForm()
     {
         _routerContextMenu = new ContextMenuStrip(_components);
-        Text = "Indigo Router Scheduler 0.1.10";
+        Text = "MikroTik Manager 0.1.11";
         Icon = AppIcon.Current;
         Width = 1280;
         Height = 720;
@@ -182,6 +182,12 @@ public sealed class MainForm : Form
         AddRow(panel, "Reboot reconnect timeout (minutes)", reconnect);
         AddRow(panel, "Stability wait after reconnect (seconds)", stable);
         AddRow(panel, "RouterOS update channel", channel);
+        AddRow(panel, "Trademark notice", new Label
+        {
+            Text = "MikroTik, RouterOS, RouterBOARD and WinBox are trademarks of MikroTikls SIA. This independent Indigo project is not affiliated with or endorsed by MikroTikls SIA.",
+            AutoSize = true,
+            MaximumSize = new Size(420, 0)
+        });
         var save = Button("Save Settings", (_, _) =>
         {
             var value = new AppSettings

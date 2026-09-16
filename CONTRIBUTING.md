@@ -1,6 +1,6 @@
 # Contributing
 
-Contributions to Indigo Router Scheduler are welcome.
+Contributions to MikroTik Manager are welcome.
 
 1. Open an issue describing the change or bug.
 2. Fork the repository and create a focused branch.

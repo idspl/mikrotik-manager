@@ -1,7 +1,7 @@
 using System.Buffers.Binary;
 using System.Text;
 
-namespace IndigoRouterScheduler;
+namespace MikroTikManager;
 
 public static class WinboxCdbParser
 {

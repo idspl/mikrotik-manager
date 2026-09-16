@@ -17,12 +17,12 @@ jobs:
         with:
           dotnet-version: 8.0.x
       - name: Restore
-        run: dotnet restore IndigoRouterScheduler.csproj
+        run: dotnet restore MikroTikManager.csproj
       - name: Build
-        run: dotnet build IndigoRouterScheduler.csproj -c Release --no-restore
+        run: dotnet build MikroTikManager.csproj -c Release --no-restore
       - name: Publish standalone Windows application
-        run: dotnet publish IndigoRouterScheduler.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=None -p:DebugSymbols=false -o release/win-x64
+        run: dotnet publish MikroTikManager.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=None -p:DebugSymbols=false -o release/win-x64
       - uses: actions/upload-artifact@v4
         with:
-          name: IndigoRouterScheduler-win-x64
-          path: release/win-x64/IndigoRouterScheduler.exe
+          name: MikroTikManager-win-x64
+          path: release/win-x64/MikroTikManager.exe

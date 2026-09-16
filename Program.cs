@@ -1,4 +1,4 @@
-namespace IndigoRouterScheduler;
+namespace MikroTikManager;
 
 internal static class Program
 {
@@ -18,7 +18,7 @@ internal static class Program
         }
         catch (Exception ex)
         {
-            string root = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "Indigo Router Scheduler", "Logs");
+            string root = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "MikroTik Manager", "Logs");
             try
             {
                 Directory.CreateDirectory(root);
@@ -26,8 +26,8 @@ internal static class Program
             }
             catch { }
             MessageBox.Show(
-                $"Indigo Router Scheduler could not start.\n\n{ex.Message}\n\nDetails were written to:\n{root}\\startup-crash.log",
-                "Indigo Router Scheduler",
+                $"MikroTik Manager could not start.\n\n{ex.Message}\n\nDetails were written to:\n{root}\\startup-crash.log",
+                "MikroTik Manager",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Error);
         }

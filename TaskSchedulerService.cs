@@ -1,6 +1,6 @@
 using System.Diagnostics;
 
-namespace IndigoRouterScheduler;
+namespace MikroTikManager;
 
 public static class TaskSchedulerService
 {
@@ -10,7 +10,7 @@ public static class TaskSchedulerService
             throw new ArgumentException("The schedule must be at least one minute in the future.");
 
         string exe = Environment.ProcessPath ?? throw new InvalidOperationException("Cannot locate the application executable.");
-        string taskName = $"Indigo Router Scheduler\\{job.Id:N}";
+        string taskName = $"MikroTik Manager\\{job.Id:N}";
         string action = $"\"{exe}\" --run-job {job.Id:D}";
         var start = new ProcessStartInfo("schtasks.exe")
         {
