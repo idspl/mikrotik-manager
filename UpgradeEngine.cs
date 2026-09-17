@@ -7,26 +7,73 @@ public sealed class UpgradeEngine(SecureStore store, AppSettings settings)
     private readonly SecureStore _store = store;
     private readonly AppSettings _settings = settings;
     public event Action<string>? Message;
+    public event Action<MaintenanceProgressUpdate>? Progress;
 
-    public async Task RunSequentialAsync(IEnumerable<RouterRecord> routers, CancellationToken cancellationToken)
+    public Task<MaintenanceRunResult> RunSequentialAsync(IEnumerable<RouterRecord> routers, CancellationToken cancellationToken)
+        => RunSequentialAsync(routers, new UpgradeRunOptions(FailureBehavior.Stop, 0), cancellationToken);
+
+    public async Task<MaintenanceRunResult> RunSequentialAsync(
+        IEnumerable<RouterRecord> routers,
+        UpgradeRunOptions options,
+        CancellationToken cancellationToken)
     {
+        DateTime runStarted = DateTime.Now;
+        var results = new List<RouterRunResult>();
         foreach (RouterRecord router in routers)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            try
+            DateTime started = DateTime.Now;
+            int maximumAttempts = options.FailureBehavior is FailureBehavior.RetryThenSkip or FailureBehavior.RetryThenStop
+                ? Math.Max(1, options.RetryCount + 1)
+                : 1;
+            Exception? failure = null;
+            bool completed = false;
+            int attempts = 0;
+            for (int attempt = 1; attempt <= maximumAttempts; attempt++)
             {
-                router.LastStatus = "Running";
-                await RunRouterAsync(router, cancellationToken);
-                router.LastStatus = "Completed";
+                attempts = attempt;
+                try
+                {
+                    router.LastStatus = attempt == 1 ? "Running preflight" : $"Retry {attempt - 1} of {maximumAttempts - 1}";
+                    Report(router, "Preflight", attempt, 5, "Running", "Checking API, identity, version and free storage");
+                    RouterHealthCheck health = await PreflightAsync(router, cancellationToken);
+                    if (!health.Passed) throw new InvalidOperationException(health.Summary);
+                    await RunRouterAsync(router, attempt, cancellationToken);
+                    router.LastStatus = "Completed";
+                    Report(router, "Completed", attempt, 100, "Completed", "Upgrade and verification completed");
+                    completed = true;
+                    break;
+                }
+                catch (OperationCanceledException)
+                {
+                    router.LastStatus = "Cancelled";
+                    Report(router, "Cancelled", attempt, 0, "Cancelled", "Operation cancelled");
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    failure = ex;
+                    router.LastStatus = "Failed: " + ex.Message;
+                    Log(router, "FAILED", ex.Message);
+                    Report(router, "Failed", attempt, 0, "Failed", ex.Message);
+                    if (attempt < maximumAttempts)
+                    {
+                        Report(router, "Retry wait", attempt, 0, "Retrying", "Retrying in 2 seconds");
+                        await Task.Delay(TimeSpan.FromSeconds(2), cancellationToken);
+                    }
+                }
             }
-            catch (OperationCanceledException) { router.LastStatus = "Cancelled"; throw; }
-            catch (Exception ex)
+
+            results.Add(new RouterRunResult(
+                router.Id, router.Name, router.Host, completed ? "Completed" : "Failed", attempts,
+                router.RouterOsVersion, router.FirmwareVersion, failure?.Message ?? "Completed", started, DateTime.Now));
+
+            if (!completed && options.FailureBehavior is FailureBehavior.Stop or FailureBehavior.RetryThenStop)
             {
-                router.LastStatus = "Failed: " + ex.Message;
-                Log(router, "FAILED", ex.Message);
-                throw new UpgradeStoppedException(router, ex);
+                break;
             }
         }
+        return new MaintenanceRunResult(runStarted, DateTime.Now, results);
     }
 
     public async Task<RouterSnapshot> TestAndReadAsync(RouterRecord router, CancellationToken ct)
@@ -40,15 +87,46 @@ public sealed class UpgradeEngine(SecureStore store, AppSettings settings)
         await using RouterOsApiClient api = await RouterOsApiClient.ConnectAsync(router, _settings, ct);
     }
 
-    private async Task RunRouterAsync(RouterRecord router, CancellationToken ct)
+    public async Task<RouterHealthCheck> PreflightAsync(RouterRecord router, CancellationToken ct)
+    {
+        try
+        {
+            await using RouterOsApiClient api = await RouterOsApiClient.ConnectAsync(router, _settings, ct);
+            RouterSnapshot snapshot = await GetSnapshotAsync(api, ct);
+            IReadOnlyDictionary<string, string> resource = await ReadOneAsync(api, "/system/resource/print", ct);
+            long.TryParse(resource.GetValueOrDefault("free-hdd-space"), out long freeBytes);
+            router.ApiStatus = "Online";
+            router.Model = snapshot.Model;
+            router.RouterOsVersion = snapshot.RouterOsVersion;
+            router.FirmwareVersion = snapshot.CurrentFirmware;
+            long required = Math.Max(0, _settings.MinimumFreeDiskMb) * 1024L * 1024L;
+            if (string.IsNullOrWhiteSpace(snapshot.RouterOsVersion))
+                return new RouterHealthCheck(router, false, "RouterOS version was not returned.", snapshot, freeBytes, DateTime.Now);
+            if (freeBytes > 0 && freeBytes < required)
+                return new RouterHealthCheck(router, false,
+                    $"Only {freeBytes / 1024 / 1024} MB free; {_settings.MinimumFreeDiskMb} MB is required.", snapshot, freeBytes, DateTime.Now);
+            return new RouterHealthCheck(router, true,
+                freeBytes > 0 ? $"Ready; {freeBytes / 1024 / 1024} MB free" : "Ready; free storage not reported",
+                snapshot, freeBytes, DateTime.Now);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            router.ApiStatus = "Failed";
+            return new RouterHealthCheck(router, false, ex.Message, null, 0, DateTime.Now);
+        }
+    }
+
+    private async Task RunRouterAsync(RouterRecord router, int attempt, CancellationToken ct)
     {
         Log(router, "START", "Safe upgrade started");
+        Report(router, "Connect", attempt, 10, "Running", "Connected to RouterOS API");
         RouterOsApiClient api = await RouterOsApiClient.ConnectAsync(router, _settings, ct);
         try
         {
             RouterSnapshot before = await GetSnapshotAsync(api, ct);
             router.Model = before.Model;
             Log(router, "PRECHECK", $"Identity={before.Identity}; model={before.Model}; RouterOS={before.RouterOsVersion}; firmware={before.CurrentFirmware}/{before.UpgradeFirmware}");
+            Report(router, "Preflight", attempt, 20, "Running", $"{before.Model}; RouterOS {before.RouterOsVersion}");
 
             string stem = SafeName($"preupgrade-{router.Name}-{DateTime.Now:yyyyMMdd-HHmm}");
             if (string.IsNullOrEmpty(router.BackupPassword))
@@ -63,6 +141,7 @@ public sealed class UpgradeEngine(SecureStore store, AppSettings settings)
                 await api.ExecuteAsync("/system/backup/save", ct, $"name={stem}", $"password={router.BackupPassword}");
             }
             Log(router, "BACKUP", stem + ".backup created with encryption");
+            Report(router, "Safety backup", attempt, 30, "Running", stem + ".backup created");
             await api.ExecuteAsync("/export", ct, $"file={stem}");
             Log(router, "EXPORT", stem + ".rsc created; sensitive values omitted by RouterOS default");
 
@@ -75,6 +154,7 @@ public sealed class UpgradeEngine(SecureStore store, AppSettings settings)
                 string current = update.GetValueOrDefault("installed-version") ?? (await GetSnapshotAsync(api, ct)).RouterOsVersion;
                 string latest = update.GetValueOrDefault("latest-version") ?? "";
                 Log(router, "PACKAGE", $"Pass={pass}; installed={current}; latest={latest}; status={update.GetValueOrDefault("status") ?? "unknown"}");
+                Report(router, "RouterOS check", attempt, 35 + (pass * 5), "Running", $"Installed {current}; latest {latest}");
                 string updateStatus = update.GetValueOrDefault("status") ?? "";
                 if (string.IsNullOrWhiteSpace(latest))
                 {
@@ -84,6 +164,7 @@ public sealed class UpgradeEngine(SecureStore store, AppSettings settings)
                 if (VersionMatches(current, latest)) break;
 
                 Log(router, "PACKAGE", "Installing RouterOS update; disconnect/reboot expected");
+                Report(router, "RouterOS upgrade", attempt, 55, "Running", $"Installing {latest}; reboot expected");
                 await api.SendExpectedDisconnectAsync("/system/package/update/install", ct);
                 await api.DisposeAsync();
                 api = await WaitForRouterAsync(router, "RouterOS reboot", ct);
@@ -91,6 +172,7 @@ public sealed class UpgradeEngine(SecureStore store, AppSettings settings)
                 if (!VersionMatches(afterPackage.RouterOsVersion, latest))
                     throw new InvalidOperationException($"RouterOS verification failed: expected {latest}, found {afterPackage.RouterOsVersion}.");
                 Log(router, "VERIFY", "RouterOS updated to " + afterPackage.RouterOsVersion);
+                Report(router, "RouterOS verified", attempt, 75, "Running", afterPackage.RouterOsVersion);
                 if (pass == maximumPackagePasses)
                     throw new InvalidOperationException("RouterOS still offers another intermediate update after four passes; stopped for manual review.");
             }
@@ -99,6 +181,7 @@ public sealed class UpgradeEngine(SecureStore store, AppSettings settings)
             if (!string.IsNullOrWhiteSpace(firmware.UpgradeFirmware) && !VersionMatches(firmware.CurrentFirmware, firmware.UpgradeFirmware))
             {
                 Log(router, "FIRMWARE", $"Upgrading RouterBOARD {firmware.CurrentFirmware} -> {firmware.UpgradeFirmware}");
+                Report(router, "Firmware upgrade", attempt, 82, "Running", $"{firmware.CurrentFirmware} -> {firmware.UpgradeFirmware}");
                 await api.ExecuteAsync("/system/routerboard/upgrade", ct);
                 await api.SendExpectedDisconnectAsync("/system/reboot", ct);
                 await api.DisposeAsync();
@@ -110,6 +193,7 @@ public sealed class UpgradeEngine(SecureStore store, AppSettings settings)
                 router.FirmwareVersion = final.CurrentFirmware;
                 router.Model = final.Model;
                 Log(router, "VERIFY", $"RouterOS={final.RouterOsVersion}; firmware={final.CurrentFirmware}");
+                Report(router, "Final verification", attempt, 95, "Running", $"RouterOS {final.RouterOsVersion}; firmware {final.CurrentFirmware}");
             }
             else
             {
@@ -117,6 +201,7 @@ public sealed class UpgradeEngine(SecureStore store, AppSettings settings)
                 router.FirmwareVersion = firmware.CurrentFirmware;
                 router.Model = firmware.Model;
                 Log(router, "FIRMWARE", "RouterBOARD firmware is already current or not applicable");
+                Report(router, "Final verification", attempt, 95, "Running", "Firmware already current or not applicable");
             }
         }
         finally { await api.DisposeAsync(); }
@@ -176,6 +261,9 @@ public sealed class UpgradeEngine(SecureStore store, AppSettings settings)
         File.AppendAllText(Path.Combine(_store.LogDirectory, $"upgrade-{DateTime.Now:yyyy-MM-dd}.log"), line + Environment.NewLine);
         Message?.Invoke(line);
     }
+
+    private void Report(RouterRecord router, string stage, int attempt, int progress, string result, string message)
+        => Progress?.Invoke(new MaintenanceProgressUpdate(router.Id, stage, attempt, progress, result, message));
 
     private static string SafeName(string value) => Regex.Replace(value, "[^A-Za-z0-9._-]", "_");
     private static string FirstNonEmpty(params string?[] values)

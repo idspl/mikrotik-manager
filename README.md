@@ -1,4 +1,4 @@
-# MikroTik Manager 0.1.12
+# MikroTik Manager 0.2.0
 
 [![Windows build](https://github.com/idspl/mikrotik-manager/actions/workflows/windows-build.yml/badge.svg)](https://github.com/idspl/mikrotik-manager/actions/workflows/windows-build.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -18,6 +18,17 @@ Permanent compiled releases and SHA-256 checksums are available on the [GitHub R
 Requirements: Windows 10/11 or Windows Server 2019+, and the .NET 8 SDK when building from source. Run `build-release.cmd` to create a self-contained `win-x64` executable in `release\win-x64`.
 
 Use a test router before production deployment. Router upgrades, reboots and sensitive configuration exports can interrupt services or expose credentials if operated without appropriate controls.
+
+## 0.2.0 maintenance control and reporting
+
+- Added integrated pre-upgrade health checks for API access, RouterOS identity/version and configurable minimum free storage.
+- Added a live **Maintenance Progress** dashboard with per-router stage, attempt, percentage, result and message columns.
+- Added **stop**, **skip**, **retry then skip** and **retry then stop** failure policies, plus **Retry Failed** and **Resume Incomplete** actions.
+- Every upgrade run creates credential-free CSV and PDF maintenance reports under `C:\ProgramData\MikroTik Manager\Reports`.
+- Bulk backups now verify both downloaded files, calculate SHA-256 hashes, record sizes and hashes in the manifest, and apply configurable retention.
+- Added instant router search and status filters; **Select All** operates on the filtered rows.
+- Added a GitHub release update checker with an optional automatic startup check.
+- Scheduled upgrades store their failure policy and retry count and also generate maintenance reports.
 
 ## 0.1.12 defaults and interactive job view
 
