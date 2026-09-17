@@ -47,8 +47,12 @@ internal static class Program
         try
         {
             var engine = new UpgradeEngine(store, store.LoadSettings());
-            await engine.RunSequentialAsync(selected, CancellationToken.None);
-            job.State = "Completed";
+            MaintenanceRunResult result = await engine.RunSequentialAsync(selected,
+                new UpgradeRunOptions(job.FailureBehavior, job.RetryCount), CancellationToken.None);
+            await new MaintenanceReportService(store).WriteAsync(result);
+            job.State = result.Failed == 0 && result.Routers.Count == selected.Count
+                ? "Completed"
+                : $"Completed with {result.Failed} failed and {selected.Count - result.Routers.Count} not processed";
         }
         catch (Exception ex)
         {

@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Security.Cryptography;
 using System.Text;
 
 namespace MikroTikManager;
@@ -11,12 +12,13 @@ public sealed class RouterBackupService(AppSettings settings)
     public async Task<BulkBackupResult> BackupAllAsync(IReadOnlyList<RouterRecord> routers, string parentFolder, CancellationToken cancellationToken)
     {
         string stamp = DateTime.Now.ToString("yyyy-MM-dd_HHmmss", CultureInfo.InvariantCulture);
-        string outputFolder = Path.Combine(parentFolder, "Indigo-Router-Backups_" + stamp);
+        CleanupExpiredBackups(parentFolder);
+        string outputFolder = Path.Combine(parentFolder, "MikroTik-Manager-Backups_" + stamp);
         Directory.CreateDirectory(outputFolder);
         string manifestPath = Path.Combine(outputFolder, "BackupManifest.csv");
-        await File.WriteAllTextAsync(manifestPath, "Router,Address,API Port,Backup File,Export File,Backup Password,Result\r\n", new UTF8Encoding(true), cancellationToken);
+        await File.WriteAllTextAsync(manifestPath, "Router,Address,API Port,Backup File,Backup Bytes,Backup SHA-256,Export File,Export Bytes,Export SHA-256,Backup Password,Verification,Result\r\n", new UTF8Encoding(true), cancellationToken);
 
-        int successful = 0, failed = 0;
+        int successful = 0, failed = 0, verified = 0;
         foreach (RouterRecord router in routers)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -29,6 +31,9 @@ public sealed class RouterBackupService(AppSettings settings)
             string localBackup = Path.Combine(outputFolder, localStem + ".backup");
             string localExport = Path.Combine(outputFolder, localStem + ".rsc");
             string result;
+            string verification = "Not verified";
+            long backupBytes = 0, exportBytes = 0;
+            string backupHash = "", exportHash = "";
 
             if (string.IsNullOrEmpty(router.BackupPassword))
                 router.BackupPassword = Convert.ToHexString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(18));
@@ -66,6 +71,10 @@ public sealed class RouterBackupService(AppSettings settings)
                     await api.DownloadFileAsync(remoteBackup, localBackup, cancellationToken);
                     Log(router, "Downloading show-sensitive .rsc");
                     await api.DownloadFileAsync(remoteExport, localExport, cancellationToken);
+                    (backupBytes, backupHash) = await VerifyFileAsync(localBackup, cancellationToken);
+                    (exportBytes, exportHash) = await VerifyFileAsync(localExport, cancellationToken);
+                    verification = "Verified size and SHA-256";
+                    verified++;
                     router.LastStatus = "Backup downloaded";
                     result = "Success";
                     successful++;
@@ -88,10 +97,36 @@ public sealed class RouterBackupService(AppSettings settings)
             }
 
             string row = string.Join(',', Csv(router.Name), Csv(router.Host), router.ApiPort.ToString(CultureInfo.InvariantCulture),
-                Csv(Path.GetFileName(localBackup)), Csv(Path.GetFileName(localExport)), Csv(router.BackupPassword), Csv(result)) + "\r\n";
+                Csv(Path.GetFileName(localBackup)), backupBytes.ToString(CultureInfo.InvariantCulture), Csv(backupHash),
+                Csv(Path.GetFileName(localExport)), exportBytes.ToString(CultureInfo.InvariantCulture), Csv(exportHash),
+                Csv(router.BackupPassword), Csv(verification), Csv(result)) + "\r\n";
             await File.AppendAllTextAsync(manifestPath, row, Encoding.UTF8, cancellationToken);
         }
-        return new BulkBackupResult(successful, failed, outputFolder);
+        return new BulkBackupResult(successful, failed, outputFolder, verified);
+    }
+
+    private async Task<(long Size, string Sha256)> VerifyFileAsync(string path, CancellationToken ct)
+    {
+        var info = new FileInfo(path);
+        if (!info.Exists || info.Length <= 0) throw new InvalidDataException($"Downloaded file is empty: {Path.GetFileName(path)}");
+        await using FileStream stream = new(path, FileMode.Open, FileAccess.Read, FileShare.Read, 65536, true);
+        byte[] hash = await SHA256.HashDataAsync(stream, ct);
+        return (info.Length, Convert.ToHexString(hash).ToLowerInvariant());
+    }
+
+    private void CleanupExpiredBackups(string parentFolder)
+    {
+        int days = _settings.BackupRetentionDays;
+        if (days <= 0 || !Directory.Exists(parentFolder)) return;
+        DateTime cutoff = DateTime.Now.AddDays(-days);
+        foreach (string folder in Directory.EnumerateDirectories(parentFolder, "MikroTik-Manager-Backups_*", SearchOption.TopDirectoryOnly))
+        {
+            try
+            {
+                if (Directory.GetCreationTime(folder) < cutoff) Directory.Delete(folder, true);
+            }
+            catch { }
+        }
     }
 
     private static async Task TryDeleteAsync(RouterOsApiClient api, string remoteFile, CancellationToken cancellationToken)
