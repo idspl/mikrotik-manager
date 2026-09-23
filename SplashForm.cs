@@ -44,7 +44,7 @@ public sealed class SplashForm : Form
         e.Graphics.DrawString("MikroTik Manager", productFont, white, 57, 116);
         e.Graphics.DrawString("MADE FOR MIKROTIK", brandFont, accent, 60, 162);
         e.Graphics.DrawString("API Management  •  Backup  •  Upgrade", detailFont, soft, 60, 198);
-        e.Graphics.DrawString("Version 0.2.1", detailFont, soft, 60, 247);
+        e.Graphics.DrawString("Version 0.2.2", detailFont, soft, 60, 247);
         e.Graphics.DrawString("MikroTik is a trademark of MikroTikls SIA. Independent Indigo project.", legalFont, soft, 60, 286);
     }
 }

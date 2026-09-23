@@ -1,4 +1,4 @@
-# MikroTik Manager 0.2.1
+# MikroTik Manager 0.2.2
 
 [![Windows build](https://github.com/idspl/mikrotik-manager/actions/workflows/windows-build.yml/badge.svg)](https://github.com/idspl/mikrotik-manager/actions/workflows/windows-build.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -18,6 +18,15 @@ Permanent compiled releases and SHA-256 checksums are available on the [GitHub R
 Requirements: Windows 10/11 or Windows Server 2019+, and the .NET 8 SDK when building from source. Run `build-release.cmd` to create a self-contained `win-x64` executable in `release\win-x64`.
 
 Use a test router before production deployment. Router upgrades, reboots and sensitive configuration exports can interrupt services or expose credentials if operated without appropriate controls.
+
+## 0.2.2 streamlined router workspace
+
+- Replaced the crowded router action buttons with compact **Inventory**, **Selection**, **Groups**, **Maintenance**, **Upgrade** and **Help** menus.
+- Kept search, status, group, failure behavior and retry controls visible in a dedicated filter bar.
+- Renamed **Run Preflight** to the clearer **Pre-Upgrade Check**.
+- Added pre-upgrade check and backup actions to the router right-click menu.
+- Reduced the toolbar height and removed the unused blank space above the router grid.
+- Improved grid headers, row spacing and alternating-row colours for easier inventory scanning.
 
 ## 0.2.1 model-aware storage preflight
 
