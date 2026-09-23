@@ -17,6 +17,24 @@ Permanent compiled releases and SHA-256 checksums are available on the [GitHub R
 
 Requirements: Windows 10/11 or Windows Server 2019+, and the .NET 8 SDK when building from source. Run `build-release.cmd` to create a self-contained `win-x64` executable in `release\win-x64`.
 
+## Safe download and Windows SmartScreen
+
+MikroTik Manager is currently distributed without a paid Authenticode certificate. Windows can therefore display **Windows protected your PC** and identify the publisher as **Unknown publisher**. This warning does not by itself mean the file is malicious, but only bypass it after verifying the download.
+
+1. Download `MikroTikManager.exe` and `MikroTikManager.exe.sha256.txt` from the [official GitHub release](https://github.com/idspl/mikrotik-manager/releases/latest).
+2. Open PowerShell in the download folder and calculate the executable hash:
+
+   ```powershell
+   Get-FileHash .\\MikroTikManager.exe -Algorithm SHA256
+   Get-Content .\\MikroTikManager.exe.sha256.txt
+   ```
+
+3. Confirm that both SHA-256 values match exactly. If Windows renamed the download, such as `MikroTikManager (2).exe`, use that actual filename in `Get-FileHash`.
+4. Optionally upload the executable to [VirusTotal](https://www.virustotal.com/gui/home/upload) for independent multi-engine scanning.
+5. Only after the checksum matches, open the executable. On the SmartScreen window select **More info**, confirm the application name, and select **Run anyway**.
+
+Do not run the file if it came from another website, the checksum differs, VirusTotal reports multiple credible detections, or the release cannot be matched to this repository. A single generic or heuristic detection can be a false positive; investigate it rather than assuming either safety or infection.
+
 Use a test router before production deployment. Router upgrades, reboots and sensitive configuration exports can interrupt services or expose credentials if operated without appropriate controls.
 
 ## 0.2.2 streamlined router workspace
