@@ -15,6 +15,10 @@ public sealed class RouterRecord
     public string Model { get; set; } = "";
     public string RouterOsVersion { get; set; } = "";
     public string FirmwareVersion { get; set; } = "";
+    public long FreeDiskBytes { get; set; }
+    public long TotalDiskBytes { get; set; }
+    public int RequiredFreeDiskMb { get; set; }
+    public string StorageStatus { get; set; } = "";
 }
 
 public sealed class UpgradeJob
@@ -64,6 +68,9 @@ public sealed record RouterHealthCheck(
     string Summary,
     RouterSnapshot? Snapshot,
     long FreeDiskBytes,
+    long TotalDiskBytes,
+    int RequiredFreeDiskMb,
+    string RuleSource,
     DateTime CheckedAt);
 
 public sealed record UpgradeRunOptions(FailureBehavior FailureBehavior, int RetryCount);

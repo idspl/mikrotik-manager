@@ -1,4 +1,4 @@
-# MikroTik Manager 0.2.0
+# MikroTik Manager 0.2.1
 
 [![Windows build](https://github.com/idspl/mikrotik-manager/actions/workflows/windows-build.yml/badge.svg)](https://github.com/idspl/mikrotik-manager/actions/workflows/windows-build.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -18,6 +18,16 @@ Permanent compiled releases and SHA-256 checksums are available on the [GitHub R
 Requirements: Windows 10/11 or Windows Server 2019+, and the .NET 8 SDK when building from source. Run `build-release.cmd` to create a self-contained `win-x64` executable in `release\win-x64`.
 
 Use a test router before production deployment. Router upgrades, reboots and sensitive configuration exports can interrupt services or expose credentials if operated without appropriate controls.
+
+## 0.2.1 model-aware storage preflight
+
+- Reads the model, free storage and total storage directly from RouterOS during preflight.
+- Automatically requires **3 MB** free on 16–20 MB devices, **8 MB** on 21–64 MB devices and **16 MB** on devices with 65 MB or more.
+- CCR models always require at least **16 MB** free.
+- When total storage is unavailable, hEX and CCR model-family rules are used before the configurable fallback.
+- Added a **Storage** column showing free, total and required space for each router.
+- The fallback setting is only used when the router does not report enough information for an automatic rule.
+- Product storage capacities can be cross-checked against MikroTik's official Product Matrix; runtime preflight uses the live router value so revised models such as hEX and hEX S are classified correctly.
 
 ## 0.2.0 maintenance control and reporting
 

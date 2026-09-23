@@ -32,7 +32,7 @@ public sealed class MainForm : Form
     public MainForm()
     {
         _routerContextMenu = new ContextMenuStrip(_components);
-        Text = "MikroTik Manager 0.2.0";
+        Text = "MikroTik Manager 0.2.1";
         Icon = AppIcon.Current;
         Width = 1280;
         Height = 720;
@@ -120,6 +120,7 @@ public sealed class MainForm : Form
         _routerGrid.Columns.Add(groupColumn);
         _routerGrid.Columns.Add(TextColumn(nameof(RouterRecord.Host), "Address", 120));
         _routerGrid.Columns.Add(TextColumn(nameof(RouterRecord.Model), "Model", 105, true));
+        _routerGrid.Columns.Add(TextColumn(nameof(RouterRecord.StorageStatus), "Storage", 125, true));
         _routerGrid.Columns.Add(TextColumn(nameof(RouterRecord.ApiPort), "API Port", 72));
         _routerGrid.Columns.Add(TextColumn(nameof(RouterRecord.Username), "Username", 85));
         _routerGrid.Columns.Add(TextColumn(nameof(RouterRecord.ApiStatus), "API Status", 120, true));
@@ -245,7 +246,7 @@ public sealed class MainForm : Form
         AddRow(panel, "Connection timeout (seconds)", connect);
         AddRow(panel, "Reboot reconnect timeout (minutes)", reconnect);
         AddRow(panel, "Stability wait after reconnect (seconds)", stable);
-        AddRow(panel, "Minimum free storage (MB)", minimumDisk);
+        AddRow(panel, "Fallback free storage requirement (MB)", minimumDisk);
         AddRow(panel, "Backup retention (days; 0 keeps all)", retention);
         AddRow(panel, "Default failure behavior", defaultFailure);
         AddRow(panel, "Default retry count", retries);
@@ -511,7 +512,7 @@ public sealed class MainForm : Form
             foreach (DataGridViewRow row in _routerGrid.Rows)
             {
                 if (row.DataBoundItem is not RouterRecord router) continue;
-                bool textMatch = search.Length == 0 || new[] { router.Name, router.Group, router.Host, router.Model, router.Username, router.RouterOsVersion, router.FirmwareVersion }
+                bool textMatch = search.Length == 0 || new[] { router.Name, router.Group, router.Host, router.Model, router.StorageStatus, router.Username, router.RouterOsVersion, router.FirmwareVersion }
                     .Any(value => value?.Contains(search, StringComparison.OrdinalIgnoreCase) == true);
                 bool statusMatch = status switch
                 {
