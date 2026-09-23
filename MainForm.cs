@@ -32,7 +32,7 @@ public sealed class MainForm : Form
     public MainForm()
     {
         _routerContextMenu = new ContextMenuStrip(_components);
-        Text = "MikroTik Manager 0.2.1";
+        Text = "MikroTik Manager 0.2.2";
         Icon = AppIcon.Current;
         Width = 1280;
         Height = 720;
@@ -69,39 +69,92 @@ public sealed class MainForm : Form
     private TabPage BuildRoutersPage()
     {
         var page = new TabPage("Routers");
-        var bar = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 150, Padding = new Padding(8), WrapContents = true };
-        bar.Controls.Add(Button("Import CDB / WBX", ImportCdb));
-        bar.Controls.Add(Button("Add Manually", AddRouterManually));
-        bar.Controls.Add(new Label { Text = "Search:", AutoSize = true, Padding = new Padding(8, 7, 0, 0) });
-        bar.Controls.Add(_routerSearch);
+        var header = new TableLayoutPanel
+        {
+            Dock = DockStyle.Top,
+            Height = 72,
+            RowCount = 2,
+            ColumnCount = 1,
+            BackColor = Color.FromArgb(245, 247, 250),
+            Padding = new Padding(4, 3, 4, 3)
+        };
+        header.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
+        header.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
+
+        var actions = new ToolStrip
+        {
+            Dock = DockStyle.Fill,
+            GripStyle = ToolStripGripStyle.Hidden,
+            RenderMode = ToolStripRenderMode.System,
+            BackColor = Color.FromArgb(245, 247, 250),
+            Padding = new Padding(3, 1, 3, 1)
+        };
+        var inventoryMenu = new ToolStripDropDownButton("Inventory");
+        inventoryMenu.DropDownItems.Add("Import WinBox CDB / WBX...", null, ImportCdb);
+        inventoryMenu.DropDownItems.Add("Add Router Manually...", null, AddRouterManually);
+        inventoryMenu.DropDownItems.Add(new ToolStripSeparator());
+        inventoryMenu.DropDownItems.Add("Remove Selected Routers...", null, RemoveSelectedRouters);
+
+        var selectionMenu = new ToolStripDropDownButton("Selection");
+        selectionMenu.DropDownItems.Add("Select All Visible Routers", null, (_, _) => SelectVisibleRouters());
+        selectionMenu.DropDownItems.Add("Clear Selection", null, (_, _) => _routerGrid.ClearSelection());
+
+        var groupMenu = new ToolStripDropDownButton("Groups");
+        groupMenu.DropDownItems.Add("Assign Selected to Group", null, AssignSelectedGroup);
+        groupMenu.DropDownItems.Add("Clear Group from Selected", null, ClearSelectedGroup);
+        groupMenu.DropDownItems.Add("Select Entire Group", null, SelectRouterGroup);
+
+        var maintenanceMenu = new ToolStripDropDownButton("Maintenance");
+        maintenanceMenu.DropDownItems.Add("Check API Status", null, CheckApiStatusSelected);
+        maintenanceMenu.DropDownItems.Add("Pre-Upgrade Check", null, RunPreflightSelected);
+        maintenanceMenu.DropDownItems.Add("Fetch Current Versions", null, FetchCurrentVersions);
+        maintenanceMenu.DropDownItems.Add(new ToolStripSeparator());
+        maintenanceMenu.DropDownItems.Add("Backup Selected Routers...", null, BackupSelectedRouters);
+
+        var upgradeMenu = new ToolStripDropDownButton("Upgrade");
+        upgradeMenu.DropDownItems.Add("Upgrade Selected Routers...", null, RunNow);
+        upgradeMenu.DropDownItems.Add("Resume Incomplete Queue", null, ResumeIncomplete);
+        upgradeMenu.DropDownItems.Add(new ToolStripSeparator());
+        upgradeMenu.DropDownItems.Add("Cancel Current Operation", null, (_, _) => _running?.Cancel());
+
+        var updatesMenu = new ToolStripDropDownButton("Help") { Alignment = ToolStripItemAlignment.Right };
+        updatesMenu.DropDownItems.Add("Check for Updates", null, async (_, _) => await CheckForUpdatesAsync(true));
+        updatesMenu.DropDownItems.Add(new ToolStripSeparator());
+        updatesMenu.DropDownItems.Add("About MikroTik Manager 0.2.2", null, (_, _) =>
+            MessageBox.Show("MikroTik Manager 0.2.2\n\nMade for MikroTik\nIndependent open-source software by Indigo Data Services Pvt Ltd.", Text,
+                MessageBoxButtons.OK, MessageBoxIcon.Information));
+        actions.Items.AddRange([inventoryMenu, selectionMenu, groupMenu, maintenanceMenu, upgradeMenu, updatesMenu]);
+
+        var filters = new ToolStrip
+        {
+            Dock = DockStyle.Fill,
+            GripStyle = ToolStripGripStyle.Hidden,
+            RenderMode = ToolStripRenderMode.System,
+            BackColor = Color.White,
+            Padding = new Padding(5, 2, 5, 2)
+        };
         _statusFilter.Items.AddRange(["All statuses", "Online", "Failed", "Needs attention"]);
         _statusFilter.SelectedIndex = 0;
-        bar.Controls.Add(_statusFilter);
-        bar.Controls.Add(Button("Select All", (_, _) => SelectVisibleRouters()));
-        bar.Controls.Add(Button("Clear Selection", (_, _) => _routerGrid.ClearSelection()));
-        bar.Controls.Add(new Label { Text = "Upgrade group:", AutoSize = true, Padding = new Padding(8, 7, 0, 0) });
-        bar.Controls.Add(_groupSelector);
-        bar.Controls.Add(Button("Set Group", AssignSelectedGroup));
-        bar.Controls.Add(Button("Clear Group", ClearSelectedGroup));
-        bar.Controls.Add(Button("Select Group", SelectRouterGroup));
-        bar.Controls.Add(Button("Remove Selected", RemoveSelectedRouters));
-        bar.Controls.Add(Button("Check API Status", CheckApiStatusSelected));
-        bar.Controls.Add(Button("Run Preflight", RunPreflightSelected));
-        bar.Controls.Add(Button("Fetch Current Versions", FetchCurrentVersions));
-        bar.Controls.Add(Button("Backup Selected", BackupSelectedRouters));
-        bar.Controls.Add(new Label { Text = "On failure:", AutoSize = true, Padding = new Padding(8, 7, 0, 0) });
         _failureBehavior.DataSource = Enum.GetValues<FailureBehavior>();
         AppSettings saved = _store.LoadSettings();
         _failureBehavior.SelectedItem = saved.DefaultFailureBehavior;
         _retryCount.Value = Math.Clamp(saved.RetryCount, (int)_retryCount.Minimum, (int)_retryCount.Maximum);
-        bar.Controls.Add(_failureBehavior);
-        bar.Controls.Add(new Label { Text = "Retries:", AutoSize = true, Padding = new Padding(8, 7, 0, 0) });
-        bar.Controls.Add(_retryCount);
-        bar.Controls.Add(Button("Upgrade Selected", RunNow));
-        bar.Controls.Add(Button("Resume Incomplete", ResumeIncomplete));
-        bar.Controls.Add(Button("Check for Updates", async (_, _) => await CheckForUpdatesAsync(true)));
-        bar.Controls.Add(Button("Cancel", (_, _) => _running?.Cancel()));
-        bar.Controls.Add(new Label { Text = "Tip: Ctrl-click individual rows; Shift-click a range", AutoSize = true, ForeColor = Color.DimGray, Padding = new Padding(8, 7, 0, 0) });
+        filters.Items.Add(new ToolStripLabel("Search"));
+        filters.Items.Add(new ToolStripControlHost(_routerSearch) { AutoSize = false, Width = 190 });
+        filters.Items.Add(new ToolStripLabel("Status"));
+        filters.Items.Add(new ToolStripControlHost(_statusFilter) { AutoSize = false, Width = 125 });
+        filters.Items.Add(new ToolStripSeparator());
+        filters.Items.Add(new ToolStripLabel("Group"));
+        filters.Items.Add(new ToolStripControlHost(_groupSelector) { AutoSize = false, Width = 150 });
+        filters.Items.Add(new ToolStripSeparator());
+        filters.Items.Add(new ToolStripLabel("On failure"));
+        filters.Items.Add(new ToolStripControlHost(_failureBehavior) { AutoSize = false, Width = 135 });
+        filters.Items.Add(new ToolStripLabel("Retries"));
+        filters.Items.Add(new ToolStripControlHost(_retryCount) { AutoSize = false, Width = 55 });
+        filters.Items.Add(new ToolStripLabel("Select rows with Ctrl or Shift") { ForeColor = Color.DimGray });
+
+        header.Controls.Add(actions, 0, 0);
+        header.Controls.Add(filters, 0, 1);
 
         _routerGrid.Dock = DockStyle.Fill;
         _routerGrid.AutoGenerateColumns = false;
@@ -114,6 +167,16 @@ public sealed class MainForm : Form
         _routerGrid.DragEnter += MainFormDragEnter;
         _routerGrid.DragDrop += MainFormDragDrop;
         _routerGrid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
+        _routerGrid.BorderStyle = BorderStyle.None;
+        _routerGrid.BackgroundColor = Color.White;
+        _routerGrid.GridColor = Color.FromArgb(225, 229, 235);
+        _routerGrid.RowTemplate.Height = 28;
+        _routerGrid.EnableHeadersVisualStyles = false;
+        _routerGrid.ColumnHeadersHeight = 32;
+        _routerGrid.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(28, 49, 78);
+        _routerGrid.ColumnHeadersDefaultCellStyle.ForeColor = Color.White;
+        _routerGrid.ColumnHeadersDefaultCellStyle.Font = new Font("Segoe UI", 9, FontStyle.Bold);
+        _routerGrid.AlternatingRowsDefaultCellStyle.BackColor = Color.FromArgb(247, 249, 252);
         _routerGrid.Columns.Add(TextColumn(nameof(RouterRecord.Name), "Router", 180));
         DataGridViewTextBoxColumn groupColumn = TextColumn(nameof(RouterRecord.Group), "Upgrade Group", 105);
         groupColumn.MaxInputLength = 80;
@@ -141,13 +204,15 @@ public sealed class MainForm : Form
         _groupSelector.DropDown += (_, _) => RefreshGroupChoices();
         RefreshGroupChoices();
         _routerContextMenu.Items.Add("Check API Status", null, CheckApiStatusSelected);
+        _routerContextMenu.Items.Add("Pre-Upgrade Check", null, RunPreflightSelected);
         _routerContextMenu.Items.Add("Fetch Current Versions", null, FetchCurrentVersions);
+        _routerContextMenu.Items.Add("Backup Router...", null, BackupSelectedRouters);
         _routerContextMenu.Items.Add(new ToolStripSeparator());
         _routerContextMenu.Items.Add("Remove Router", null, RemoveSelectedRouters);
         _routerContextMenu.Opening += (_, e) => e.Cancel = !_contextMenuRowValid || _operationInProgress;
         _routerGrid.ContextMenuStrip = _routerContextMenu;
         page.Controls.Add(_routerGrid);
-        page.Controls.Add(bar);
+        page.Controls.Add(header);
         return page;
     }
 
