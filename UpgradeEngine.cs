@@ -95,24 +95,34 @@ public sealed class UpgradeEngine(SecureStore store, AppSettings settings)
             RouterSnapshot snapshot = await GetSnapshotAsync(api, ct);
             IReadOnlyDictionary<string, string> resource = await ReadOneAsync(api, "/system/resource/print", ct);
             long.TryParse(resource.GetValueOrDefault("free-hdd-space"), out long freeBytes);
+            long.TryParse(resource.GetValueOrDefault("total-hdd-space"), out long totalBytes);
+            StorageRequirement storage = StoragePolicy.Resolve(snapshot.Model, totalBytes, _settings.MinimumFreeDiskMb);
             router.ApiStatus = "Online";
             router.Model = snapshot.Model;
             router.RouterOsVersion = snapshot.RouterOsVersion;
             router.FirmwareVersion = snapshot.CurrentFirmware;
-            long required = Math.Max(0, _settings.MinimumFreeDiskMb) * 1024L * 1024L;
+            router.FreeDiskBytes = freeBytes;
+            router.TotalDiskBytes = totalBytes;
+            router.RequiredFreeDiskMb = storage.RequiredFreeMb;
+            router.StorageStatus = StoragePolicy.FormatStatus(freeBytes, totalBytes, storage.RequiredFreeMb);
+            long required = storage.RequiredFreeMb * 1024L * 1024L;
             if (string.IsNullOrWhiteSpace(snapshot.RouterOsVersion))
-                return new RouterHealthCheck(router, false, "RouterOS version was not returned.", snapshot, freeBytes, DateTime.Now);
+                return new RouterHealthCheck(router, false, "RouterOS version was not returned.", snapshot,
+                    freeBytes, totalBytes, storage.RequiredFreeMb, storage.Source, DateTime.Now);
             if (freeBytes > 0 && freeBytes < required)
                 return new RouterHealthCheck(router, false,
-                    $"Only {freeBytes / 1024 / 1024} MB free; {_settings.MinimumFreeDiskMb} MB is required.", snapshot, freeBytes, DateTime.Now);
+                    $"Only {StoragePolicy.ToMb(freeBytes):0.0} MB free; {storage.RequiredFreeMb} MB is required ({storage.Source}).",
+                    snapshot, freeBytes, totalBytes, storage.RequiredFreeMb, storage.Source, DateTime.Now);
             return new RouterHealthCheck(router, true,
-                freeBytes > 0 ? $"Ready; {freeBytes / 1024 / 1024} MB free" : "Ready; free storage not reported",
-                snapshot, freeBytes, DateTime.Now);
+                freeBytes > 0
+                    ? $"Ready; {StoragePolicy.ToMb(freeBytes):0.0} MB free of {StoragePolicy.ToMb(totalBytes):0.0} MB; requires {storage.RequiredFreeMb} MB ({storage.Source})"
+                    : $"Ready; free storage not reported; using {storage.RequiredFreeMb} MB requirement ({storage.Source})",
+                snapshot, freeBytes, totalBytes, storage.RequiredFreeMb, storage.Source, DateTime.Now);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             router.ApiStatus = "Failed";
-            return new RouterHealthCheck(router, false, ex.Message, null, 0, DateTime.Now);
+            return new RouterHealthCheck(router, false, ex.Message, null, 0, 0, _settings.MinimumFreeDiskMb, "fallback setting", DateTime.Now);
         }
     }
 
