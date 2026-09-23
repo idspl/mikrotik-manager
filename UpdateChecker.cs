@@ -10,7 +10,7 @@ public static class UpdateChecker
     public static async Task<UpdateCheckResult> CheckAsync(CancellationToken ct)
     {
         using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(12) };
-        client.DefaultRequestHeaders.UserAgent.ParseAdd("MikroTikManager/0.2.2");
+        client.DefaultRequestHeaders.UserAgent.ParseAdd("MikroTikManager/0.2.3");
         using HttpResponseMessage response = await client.GetAsync(LatestReleaseApi, ct);
         response.EnsureSuccessStatusCode();
         using JsonDocument document = JsonDocument.Parse(await response.Content.ReadAsStreamAsync(ct));
