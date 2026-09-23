@@ -32,7 +32,7 @@ public sealed class MainForm : Form
     public MainForm()
     {
         _routerContextMenu = new ContextMenuStrip(_components);
-        Text = "MikroTik Manager 0.2.2";
+        Text = "MikroTik Manager 0.2.3";
         Icon = AppIcon.Current;
         Width = 1280;
         Height = 720;
@@ -120,8 +120,8 @@ public sealed class MainForm : Form
         var updatesMenu = new ToolStripDropDownButton("Help") { Alignment = ToolStripItemAlignment.Right };
         updatesMenu.DropDownItems.Add("Check for Updates", null, async (_, _) => await CheckForUpdatesAsync(true));
         updatesMenu.DropDownItems.Add(new ToolStripSeparator());
-        updatesMenu.DropDownItems.Add("About MikroTik Manager 0.2.2", null, (_, _) =>
-            MessageBox.Show("MikroTik Manager 0.2.2\n\nMade for MikroTik\nIndependent open-source software by Indigo Data Services Pvt Ltd.", Text,
+        updatesMenu.DropDownItems.Add("About MikroTik Manager 0.2.3", null, (_, _) =>
+            MessageBox.Show("MikroTik Manager 0.2.3\n\nMade for MikroTik\nIndependent open-source software by Indigo Data Services Pvt Ltd.", Text,
                 MessageBoxButtons.OK, MessageBoxIcon.Information));
         actions.Items.AddRange([inventoryMenu, selectionMenu, groupMenu, maintenanceMenu, upgradeMenu, updatesMenu]);
 
@@ -901,13 +901,48 @@ public sealed class MainForm : Form
     private void UpdateProgress(MaintenanceProgressUpdate update)
     {
         MaintenanceProgressRow? row = _progressRows.FirstOrDefault(x => x.RouterId == update.RouterId);
-        if (row is null) return;
-        row.Stage = update.Stage;
-        row.Attempt = update.Attempt;
-        row.Progress = update.Progress;
-        row.Result = update.Result;
-        row.Message = update.Message;
-        _progressRows.ResetItem(_progressRows.IndexOf(row));
+        if (row is not null)
+        {
+            row.Stage = update.Stage;
+            row.Attempt = update.Attempt;
+            row.Progress = update.Progress;
+            row.Result = update.Result;
+            row.Message = update.Message;
+            _progressRows.ResetItem(_progressRows.IndexOf(row));
+        }
+
+        RouterRecord? router = _routers.FirstOrDefault(x => x.Id == update.RouterId);
+        if (router is not null)
+        {
+            router.LastStatus = RouterGridStatus(update);
+            _routerGrid.Refresh();
+        }
+    }
+
+    private static string RouterGridStatus(MaintenanceProgressUpdate update)
+    {
+        if (update.Result == "Completed") return "Completed";
+        if (update.Result == "Failed") return "Failed: " + update.Message;
+        if (update.Result == "Cancelled") return "Cancelled";
+        if (update.Result == "Retrying") return "Retrying: " + update.Message;
+
+        return update.Stage switch
+        {
+            "Preflight" => "Running preflight",
+            "Connect" => "Connecting to RouterOS",
+            "Safety backup" => "Backing up configuration",
+            "RouterOS check" => "Checking RouterOS packages",
+            "RouterOS upgrade" => "Upgrading RouterOS packages",
+            "RouterOS restart" => "Restarting after RouterOS upgrade",
+            "RouterOS reconnect" => "Waiting for RouterOS restart",
+            "RouterOS verified" => "RouterOS upgrade verified",
+            "Firmware upgrade" => "Upgrading RouterBOARD firmware",
+            "Firmware restart" => "Restarting after firmware upgrade",
+            "Firmware reconnect" => "Waiting for firmware restart",
+            "Stability hold" => "Stability hold: " + update.Message,
+            "Final verification" => "Verifying RouterOS and firmware",
+            _ => string.IsNullOrWhiteSpace(update.Message) ? update.Stage : update.Stage + ": " + update.Message
+        };
     }
 
     private MaintenanceRunResult BuildProgressResult(DateTime started, string pendingResult)
