@@ -1,4 +1,4 @@
-# MikroTik Manager 0.2.2
+# MikroTik Manager 0.2.3
 
 [![Windows build](https://github.com/idspl/mikrotik-manager/actions/workflows/windows-build.yml/badge.svg)](https://github.com/idspl/mikrotik-manager/actions/workflows/windows-build.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -36,6 +36,13 @@ MikroTik Manager is currently distributed without a paid Authenticode certificat
 Do not run the file if it came from another website, the checksum differs, VirusTotal reports multiple credible detections, or the release cannot be matched to this repository. A single generic or heuristic detection can be a false positive; investigate it rather than assuming either safety or infection.
 
 Use a test router before production deployment. Router upgrades, reboots and sensitive configuration exports can interrupt services or expose credentials if operated without appropriate controls.
+
+## 0.2.3 live upgrade-stage status
+
+- Fixed the main Routers grid remaining on **Running preflight** while an upgrade continued in the background.
+- The Status column now shows **Backing up configuration**, **Checking RouterOS packages**, **Upgrading RouterOS packages**, restart/reconnect waits, **Stability hold**, **Upgrading RouterBOARD firmware**, final verification and completion.
+- Added explicit progress events for both RouterOS and firmware reboots, API reconnect attempts and the configured stability wait.
+- The Maintenance Progress tab and main Router Status column now follow the same live maintenance stage.
 
 ## 0.2.2 streamlined router workspace
 

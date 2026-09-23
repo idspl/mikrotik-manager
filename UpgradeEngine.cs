@@ -177,7 +177,7 @@ public sealed class UpgradeEngine(SecureStore store, AppSettings settings)
                 Report(router, "RouterOS upgrade", attempt, 55, "Running", $"Installing {latest}; reboot expected");
                 await api.SendExpectedDisconnectAsync("/system/package/update/install", ct);
                 await api.DisposeAsync();
-                api = await WaitForRouterAsync(router, "RouterOS reboot", ct);
+                api = await WaitForRouterAsync(router, "RouterOS", attempt, 65, ct);
                 RouterSnapshot afterPackage = await GetSnapshotAsync(api, ct);
                 if (!VersionMatches(afterPackage.RouterOsVersion, latest))
                     throw new InvalidOperationException($"RouterOS verification failed: expected {latest}, found {afterPackage.RouterOsVersion}.");
@@ -195,7 +195,7 @@ public sealed class UpgradeEngine(SecureStore store, AppSettings settings)
                 await api.ExecuteAsync("/system/routerboard/upgrade", ct);
                 await api.SendExpectedDisconnectAsync("/system/reboot", ct);
                 await api.DisposeAsync();
-                api = await WaitForRouterAsync(router, "firmware reboot", ct);
+                api = await WaitForRouterAsync(router, "Firmware", attempt, 88, ct);
                 RouterSnapshot final = await GetSnapshotAsync(api, ct);
                 if (!VersionMatches(final.CurrentFirmware, final.UpgradeFirmware))
                     throw new InvalidOperationException($"Firmware verification failed: current {final.CurrentFirmware}, expected {final.UpgradeFirmware}.");
@@ -218,27 +218,36 @@ public sealed class UpgradeEngine(SecureStore store, AppSettings settings)
         Log(router, "DONE", "Upgrade and verification completed");
     }
 
-    private async Task<RouterOsApiClient> WaitForRouterAsync(RouterRecord router, string phase, CancellationToken ct)
+    private async Task<RouterOsApiClient> WaitForRouterAsync(
+        RouterRecord router, string phase, int attempt, int progress, CancellationToken ct)
     {
         DateTime deadline = DateTime.UtcNow.AddMinutes(_settings.ReconnectTimeoutMinutes);
         Exception? last = null;
+        Report(router, phase + " restart", attempt, progress, "Running", "Router reboot initiated");
         await Task.Delay(TimeSpan.FromSeconds(10), ct);
+        Report(router, phase + " reconnect", attempt, progress + 2, "Running",
+            $"Waiting up to {_settings.ReconnectTimeoutMinutes} minute(s) for API");
+
         while (DateTime.UtcNow < deadline)
         {
             try
             {
                 RouterOsApiClient client = await RouterOsApiClient.ConnectAsync(router, _settings, ct);
-                Log(router, "ONLINE", $"Connected after {phase}; stability wait {_settings.StableOnlineSeconds}s");
+                Log(router, "ONLINE", $"Connected after {phase} restart; stability wait {_settings.StableOnlineSeconds}s");
+                Report(router, "Stability hold", attempt, progress + 4, "Running",
+                    $"{_settings.StableOnlineSeconds} second(s) after {phase} restart");
                 await Task.Delay(TimeSpan.FromSeconds(_settings.StableOnlineSeconds), ct);
                 return client;
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 last = ex;
+                Report(router, phase + " reconnect", attempt, progress + 2, "Running",
+                    "Router is still restarting; retrying API connection");
                 await Task.Delay(TimeSpan.FromSeconds(5), ct);
             }
         }
-        throw new TimeoutException($"Router did not return after {phase}. Last error: {last?.Message}");
+        throw new TimeoutException($"Router did not return after {phase} restart. Last error: {last?.Message}");
     }
 
     private static async Task<RouterSnapshot> GetSnapshotAsync(RouterOsApiClient api, CancellationToken ct)
