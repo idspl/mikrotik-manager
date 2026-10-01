@@ -20,18 +20,9 @@ internal static class Program
         {
             if (args.Length == 2 && args[0] == "--run-job" && Guid.TryParse(args[1], out Guid queuedJob))
             {
-                var waitingStore = new SecureStore();
-                DateTime deadline = DateTime.UtcNow.AddHours(24);
-                while (!owned && DateTime.UtcNow < deadline)
-                {
-                    var job = waitingStore.LoadJobs().FirstOrDefault(x => x.Id == queuedJob);
-                    if (job is null) { Environment.ExitCode = 2; return; }
-                    if (job.State != "Scheduled" && job.State != "Running")
-                    { Environment.ExitCode = job.State == "Completed" ? 0 : 2; return; }
-                    try { owned = instance.WaitOne(TimeSpan.FromSeconds(2)); }
-                    catch (AbandonedMutexException) { owned = true; }
-                }
-                if (!owned) { Environment.ExitCode = 2; return; }
+                var outcome = ScheduledJobCoordinator.Wait(instance, new SecureStore(), queuedJob, TimeSpan.FromHours(24));
+                owned = outcome == ScheduledOwnership.Acquired;
+                if (!owned) { Environment.ExitCode = outcome == ScheduledOwnership.CompletedByDesktop ? 0 : 2; return; }
             }
             else { MessageBox.Show("MikroTik Manager or a scheduled job is already running."); return; }
         }

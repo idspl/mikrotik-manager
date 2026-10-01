@@ -45,6 +45,35 @@ internal static class RegressionTests
         Check(!ReleaseVersion.IsNewerSameMajor("7.24.5", "6.49.22"), "No automatic major upgrade selection");
         Check(!ReleaseVersion.IsNewerSameMajor("7.24rc4", "7.24"), "Do not select release candidate below stable");
         Check(ReleaseVersion.IsNewerSameMajor("7.24rc4", "7.24beta9"), "Release candidate ranks after beta");
+        var scheduled = new UpgradeJob { State = "Scheduled", RouterIds = [router.Id] };
+        store.SaveJobs([scheduled]);
+        string mutexName = "MikroTikManager-test-" + Guid.NewGuid().ToString("N");
+        using (var owner = new Mutex(true, mutexName))
+        {
+            // A competing launcher must not own the lock while the desktop is active.
+            var blocked = Task.Run(() =>
+            {
+                using var contender = new Mutex(false, mutexName);
+                return ScheduledJobCoordinator.Wait(contender, store, scheduled.Id, TimeSpan.FromMilliseconds(100));
+            }).GetAwaiter().GetResult();
+            Check(blocked == ScheduledOwnership.Failed, "Competing launcher cannot acquire active desktop lock");
+            scheduled.State = "Completed"; store.SaveJobs([scheduled]);
+            var completedByDesktop = Task.Run(() =>
+            {
+                using var contender = new Mutex(false, mutexName);
+                return ScheduledJobCoordinator.Wait(contender, store, scheduled.Id, TimeSpan.FromSeconds(1));
+            }).GetAwaiter().GetResult();
+            Check(completedByDesktop == ScheduledOwnership.CompletedByDesktop, "Launcher sees desktop completion without replay");
+            scheduled.State = "Scheduled"; store.SaveJobs([scheduled]); owner.ReleaseMutex();
+            var takeover = Task.Run(() =>
+            {
+                using var contender = new Mutex(false, mutexName);
+                var state = ScheduledJobCoordinator.Wait(contender, store, scheduled.Id, TimeSpan.FromSeconds(1));
+                if (state == ScheduledOwnership.Acquired) contender.ReleaseMutex();
+                return state;
+            }).GetAwaiter().GetResult();
+            Check(takeover == ScheduledOwnership.Acquired, "Launcher takes ownership after desktop closes");
+        }
         store.SaveRouters([router]);
         Check(store.LoadRouters().Single().Password == router.Password, "DPAPI credentials roundtrip");
         Check(!Encoding.UTF8.GetString(File.ReadAllBytes(Path.Combine(directory, "routers.dat"))).Contains(router.Password), "Credentials must not be plaintext");

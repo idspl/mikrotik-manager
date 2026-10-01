@@ -91,7 +91,10 @@ public sealed class SecureStore
     private static T? LoadProtected<T>(string path)
     {
         if (!File.Exists(path)) return default;
-        byte[] clear = Dpapi.Unprotect(File.ReadAllBytes(path));
+        using var input = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete);
+        using var bytes = new MemoryStream();
+        input.CopyTo(bytes);
+        byte[] clear = Dpapi.Unprotect(bytes.ToArray());
         try { return JsonSerializer.Deserialize<T>(clear, JsonOptions); }
         finally { Array.Clear(clear, 0, clear.Length); }
     }
