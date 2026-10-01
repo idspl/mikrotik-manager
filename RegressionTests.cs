@@ -27,6 +27,21 @@ internal static class RegressionTests
         string file = Path.Combine(directory, "hash-fixture");
         File.WriteAllText(file, "abc", new UTF8Encoding(false));
         Check(SelfUpdater.Hash(file) == "BA7816BF8F01CFEA414140DE5DAE2223B00361A396177A9CB410FF61F20015AD", "SHA256 known vector");
+        string target = Path.Combine(directory, "installed-fixture");
+        File.WriteAllText(target, "old executable fixture");
+        bool rejected = false;
+        try { SelfUpdater.ReplaceVerified(file, target, new string('0', 64), target + ".new", target + ".previous"); }
+        catch (InvalidOperationException) { rejected = true; }
+        Check(rejected && File.ReadAllText(target) == "old executable fixture", "Checksum mismatch preserves installed file");
+        SelfUpdater.ReplaceVerified(file, target, SelfUpdater.Hash(file), target + ".new", target + ".previous");
+        Check(File.ReadAllText(target) == "abc", "Updater installs verified bytes at same path");
+        Check(File.ReadAllText(target + ".previous") == "old executable fixture", "Updater retains recovery copy");
+        // Also exercise the real message formatting (including TimeSpan formatting and redaction).
+        var report = typeof(UpgradeEngine).GetMethod("Report", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
+        MaintenanceProgressUpdate? last = null;
+        engine.Progress += update => last = update;
+        report.Invoke(engine, [router, "Stability hold", 1, 90, "Running", "secret=" + router.Password]);
+        Check(last is not null && last.Message.Contains("elapsed") && !last.Message.Contains(router.Password), "Progress formatting and secret redaction");
         // Files are isolated test fixtures. Retain them for CI diagnostics until runner cleanup.
     }
 }
