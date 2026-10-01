@@ -19,6 +19,12 @@ public sealed class RouterRecord
     public long TotalDiskBytes { get; set; }
     public int RequiredFreeDiskMb { get; set; }
     public string StorageStatus { get; set; } = "";
+    public DateTime? LastCheckedAt { get; set; }
+    public DateTime? LastApiCheckAt { get; set; }
+    public string AvailableFirmware { get; set; } = "";
+    public string CriticalInterfaces { get; set; } = "";
+    public List<BackupHistoryEntry> Backups { get; set; } = [];
+    public DateTime? LastBackupAt => Backups.LastOrDefault()?.CreatedAt;
 }
 
 public sealed class UpgradeJob
@@ -33,6 +39,7 @@ public sealed class UpgradeJob
     public DateTime? CompletedAt { get; set; }
     public FailureBehavior FailureBehavior { get; set; } = FailureBehavior.Stop;
     public int RetryCount { get; set; } = 1;
+    public DateTime? WindowEnd { get; set; }
 }
 
 public enum FailureBehavior
@@ -57,6 +64,8 @@ public sealed class AppSettings
     public int MinimumFreeDiskMb { get; set; } = 16;
     public int BackupRetentionDays { get; set; } = 30;
     public bool CheckForUpdatesAtStartup { get; set; } = true;
+    public bool RefreshRoutersAtStartup { get; set; } = true;
+    public int InterfaceRecoverySeconds { get; set; } = 60;
 }
 
 public sealed record ApiReply(string Type, IReadOnlyDictionary<string, string> Attributes);
@@ -73,7 +82,10 @@ public sealed record RouterHealthCheck(
     string RuleSource,
     DateTime CheckedAt);
 
-public sealed record UpgradeRunOptions(FailureBehavior FailureBehavior, int RetryCount);
+public sealed record UpgradeRunOptions(FailureBehavior FailureBehavior, int RetryCount,
+    DateTime? WindowEnd = null, bool CanaryPerGroup = false);
+public sealed record BackupHistoryEntry(DateTime CreatedAt, string BackupPath, string ExportPath,
+    string BackupHash, string ExportHash, string Verification);
 public sealed record RouterRunResult(
     Guid RouterId,
     string Router,

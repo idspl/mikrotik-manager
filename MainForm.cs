@@ -34,7 +34,7 @@ public sealed partial class MainForm : Form
     public MainForm()
     {
         _routerContextMenu = new ContextMenuStrip(_components);
-        Text = "MikroTik Manager 0.2.5";
+        Text = "MikroTik Manager 0.3.0";
         Icon = AppIcon.Current;
         Width = 1280;
         Height = 720;
@@ -42,7 +42,9 @@ public sealed partial class MainForm : Form
         MinimumSize = new Size(900, 560);
         AllowDrop = true;
         _routers = new SortableBindingList<RouterRecord>(_store.LoadRouters());
+        foreach (var router in _routers) { router.ApiStatus = "Not checked"; router.LastStatus = "Saved information — awaiting live check"; }
         _jobs = new BindingList<UpgradeJob>(_store.LoadJobs());
+        foreach (var job in _jobs.Where(x => x.State == "Running")) job.State = "Interrupted — review maintenance history";
         BuildUi();
         DragEnter += MainFormDragEnter;
         DragDrop += MainFormDragDrop;
@@ -62,6 +64,9 @@ public sealed partial class MainForm : Form
             _routerGrid.ClearSelection();
             RestoreIncompleteQueue();
             if (_store.LoadSettings().CheckForUpdatesAtStartup) await CheckForUpdatesAsync(false);
+            if (!IsDisposed && _store.LoadSettings().RefreshRoutersAtStartup && !_operationInProgress)
+                await FetchVersionsAsync(_routers.ToList());
+            if (!IsDisposed) StartScheduleMonitor();
         };
     }
 
@@ -107,12 +112,16 @@ public sealed partial class MainForm : Form
         var inventoryMenu = new ToolStripDropDownButton("Inventory");
         inventoryMenu.DropDownItems.Add("Import WinBox CDB / WBX...", null, ImportCdb);
         inventoryMenu.DropDownItems.Add("Add Router Manually...", null, AddRouterManually);
+        inventoryMenu.DropDownItems.Add("Edit Router...", null, EditRouter);
+        inventoryMenu.DropDownItems.Add("Export Configuration...", null, ExportConfiguration);
+        inventoryMenu.DropDownItems.Add("Import Configuration...", null, ImportConfiguration);
         inventoryMenu.DropDownItems.Add(new ToolStripSeparator());
         inventoryMenu.DropDownItems.Add("Remove Selected Routers...", null, RemoveSelectedRouters);
 
         var selectionMenu = new ToolStripDropDownButton("Selection");
         selectionMenu.DropDownItems.Add("Select All Visible Routers", null, (_, _) => SelectVisibleRouters());
         selectionMenu.DropDownItems.Add("Clear Selection", null, (_, _) => _routerGrid.ClearSelection());
+        selectionMenu.DropDownItems.Add("Select Outdated Routers", null, SelectOutdatedRouters);
 
         var groupMenu = new ToolStripDropDownButton("Groups");
         groupMenu.DropDownItems.Add("Assign Selected to Group", null, AssignSelectedGroup);
@@ -125,6 +134,7 @@ public sealed partial class MainForm : Form
         maintenanceMenu.DropDownItems.Add("Fetch Current Versions", null, FetchCurrentVersions);
         maintenanceMenu.DropDownItems.Add(new ToolStripSeparator());
         maintenanceMenu.DropDownItems.Add("Backup Selected Routers...", null, BackupSelectedRouters);
+        maintenanceMenu.DropDownItems.Add("Backup History...", null, ShowBackupHistory);
 
         var upgradeMenu = new ToolStripDropDownButton("Upgrade");
         upgradeMenu.DropDownItems.Add("Upgrade Selected Routers...", null, RunNow);
@@ -137,8 +147,8 @@ public sealed partial class MainForm : Form
         var updatesMenu = new ToolStripDropDownButton("Help") { Alignment = ToolStripItemAlignment.Right };
         updatesMenu.DropDownItems.Add("Check for Updates", null, async (_, _) => await CheckForUpdatesAsync(true));
         updatesMenu.DropDownItems.Add(new ToolStripSeparator());
-        updatesMenu.DropDownItems.Add("About MikroTik Manager 0.2.5", null, (_, _) =>
-            MessageBox.Show("MikroTik Manager 0.2.5\n\nMade for MikroTik\nIndependent open-source software by Indigo Data Services Pvt Ltd.", Text,
+        updatesMenu.DropDownItems.Add("About MikroTik Manager 0.3.0", null, (_, _) =>
+            MessageBox.Show("MikroTik Manager 0.3.0\n\nMade for MikroTik\nIndependent open-source software by Indigo Data Services Pvt Ltd.", Text,
                 MessageBoxButtons.OK, MessageBoxIcon.Information));
         actions.Items.AddRange([inventoryMenu, selectionMenu, groupMenu, maintenanceMenu, upgradeMenu, updatesMenu]);
 
@@ -207,6 +217,8 @@ public sealed partial class MainForm : Form
         _routerGrid.Columns.Add(TextColumn(nameof(RouterRecord.ApiStatus), "API Status", 120, true));
         _routerGrid.Columns.Add(TextColumn(nameof(RouterRecord.RouterOsVersion), "RouterOS", 85, true));
         _routerGrid.Columns.Add(TextColumn(nameof(RouterRecord.FirmwareVersion), "Firmware", 85, true));
+        _routerGrid.Columns.Add(TextColumn(nameof(RouterRecord.LastCheckedAt), "Versions checked", 125, true));
+        _routerGrid.Columns.Add(TextColumn(nameof(RouterRecord.LastBackupAt), "Last local backup", 125, true));
         _routerGrid.Columns.Add(TextColumn(nameof(RouterRecord.LastStatus), "Status", 190, true));
         _routerGrid.DataSource = _routers;
         _routerGrid.CellValueChanged += (_, e) =>
@@ -225,6 +237,8 @@ public sealed partial class MainForm : Form
         _routerContextMenu.Items.Add("Edit Credentials...", null, EditCredentials);
         _routerContextMenu.Items.Add("Pre-Upgrade Check", null, RunPreflightSelected);
         _routerContextMenu.Items.Add("Fetch Current Versions", null, FetchCurrentVersions);
+        _routerContextMenu.Items.Add("Edit Router...", null, EditRouter);
+        _routerContextMenu.Items.Add("Backup History...", null, ShowBackupHistory);
         _routerContextMenu.Items.Add("Backup Router...", null, BackupSelectedRouters);
         _routerContextMenu.Items.Add(new ToolStripSeparator());
         _routerContextMenu.Items.Add("Remove Router", null, RemoveSelectedRouters);
@@ -268,13 +282,15 @@ public sealed partial class MainForm : Form
     private TabPage BuildSchedulesPage()
     {
         var page = new TabPage("Schedules");
-        var bar = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 48, Padding = new Padding(8), WrapContents = false };
+        var bar = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 90, Padding = new Padding(8), WrapContents = true, AutoScroll = true };
         _scheduleTime.Value = DateTime.Now.AddHours(1);
         bar.Controls.Add(new Label { Text = "Job:", AutoSize = true, Padding = new Padding(0, 7, 0, 0) });
         bar.Controls.Add(_jobName);
         bar.Controls.Add(new Label { Text = "Run at:", AutoSize = true, Padding = new Padding(8, 7, 0, 0) });
         bar.Controls.Add(_scheduleTime);
         bar.Controls.Add(Button("Schedule Selected Routers", CreateSchedule));
+        bar.Controls.Add(_scheduleWindow); bar.Controls.Add(_scheduleEnd);
+        bar.Controls.Add(Button("Activate Imported Schedule", ActivateImportedSchedule));
         _jobGrid.Dock = DockStyle.Fill;
         _jobGrid.ReadOnly = true;
         _jobGrid.AllowUserToAddRows = false;
@@ -285,6 +301,7 @@ public sealed partial class MainForm : Form
         _jobGrid.Columns.Add(TextColumn(nameof(UpgradeJob.ScheduledLocalTime), "Scheduled", 120, true));
         _jobGrid.Columns.Add(TextColumn(nameof(UpgradeJob.RouterCount), "Routers", 60, true));
         _jobGrid.Columns.Add(TextColumn(nameof(UpgradeJob.State), "State", 220, true));
+        _jobGrid.Columns.Add(TextColumn(nameof(UpgradeJob.WindowEnd), "Cutoff", 120, true));
         _jobGrid.Columns.Add(TextColumn(nameof(UpgradeJob.StartedAt), "Started", 120, true));
         _jobGrid.Columns.Add(TextColumn(nameof(UpgradeJob.CompletedAt), "Completed", 120, true));
         _jobGrid.DataSource = _jobs;
@@ -322,6 +339,8 @@ public sealed partial class MainForm : Form
         defaultFailure.SelectedItem = current.DefaultFailureBehavior;
         var retries = Numeric(current.RetryCount, 0, 5);
         var updateChecks = new CheckBox { Checked = current.CheckForUpdatesAtStartup, Text = "Check GitHub releases at startup", AutoSize = true };
+        var refreshRouters = new CheckBox { Checked = current.RefreshRoutersAtStartup, Text = "Check API and versions at startup", AutoSize = true };
+        var interfaceWait = Numeric(current.InterfaceRecoverySeconds, 0, 600);
         var channel = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 180 };
         channel.Items.AddRange(["stable", "long-term", "testing", "development"]);
         channel.SelectedItem = current.UpdateChannel;
@@ -337,6 +356,9 @@ public sealed partial class MainForm : Form
         AddRow(panel, "Default failure behavior", defaultFailure);
         AddRow(panel, "Default retry count", retries);
         AddRow(panel, "Application updates", updateChecks);
+        AddRow(panel, "Router status refresh", refreshRouters);
+        AddRow(panel, "Critical interface recovery (seconds)", interfaceWait);
+        page.AutoScroll = true;
         AddRow(panel, "RouterOS update channel", channel);
         AddRow(panel, "Trademark notice", new Label
         {
@@ -359,7 +381,9 @@ public sealed partial class MainForm : Form
                 BackupRetentionDays = (int)retention.Value,
                 DefaultFailureBehavior = (FailureBehavior)(defaultFailure.SelectedItem ?? FailureBehavior.RetryThenSkip),
                 RetryCount = (int)retries.Value,
-                CheckForUpdatesAtStartup = updateChecks.Checked
+                CheckForUpdatesAtStartup = updateChecks.Checked,
+                RefreshRoutersAtStartup = refreshRouters.Checked,
+                InterfaceRecoverySeconds = (int)interfaceWait.Value
             };
             _store.SaveSettings(value);
             _failureBehavior.SelectedItem = value.DefaultFailureBehavior;
@@ -673,6 +697,12 @@ public sealed partial class MainForm : Form
         if (_operationInProgress) return;
         List<RouterRecord> selected = SelectedRouters();
         if (selected.Count == 0) { MessageBox.Show("Select at least one router."); return; }
+        await FetchVersionsAsync(selected);
+    }
+
+    private async Task FetchVersionsAsync(List<RouterRecord> selected)
+    {
+        if (_operationInProgress || selected.Count == 0) return;
         SetBusy(true, "Fetching current RouterOS and firmware versions...");
         _running = new CancellationTokenSource();
         CancellationToken token = _running.Token;
@@ -699,6 +729,8 @@ public sealed partial class MainForm : Form
                         router.Model = result.Model;
                         router.RouterOsVersion = result.RouterOsVersion;
                         router.FirmwareVersion = result.CurrentFirmware;
+                        router.AvailableFirmware = result.UpgradeFirmware;
+                        router.LastCheckedAt = router.LastApiCheckAt = DateTime.Now;
                         router.LastStatus = "Versions fetched";
                     }
                     catch (OperationCanceledException) when (token.IsCancellationRequested)
@@ -709,6 +741,7 @@ public sealed partial class MainForm : Form
                     catch (Exception ex)
                     {
                         router.ApiStatus = "Failed";
+                        router.LastApiCheckAt = DateTime.Now;
                         router.LastStatus = "Test failed: " + ex.Message;
                         failed++;
                     }
@@ -758,6 +791,7 @@ public sealed partial class MainForm : Form
                         await engine.CheckApiAsync(router, _running.Token);
                         router.ApiStatus = "Online";
                         router.LastStatus = "API online";
+                        router.LastApiCheckAt = DateTime.Now;
                         online++;
                     }
                     catch (Exception ex) when (ex is not OperationCanceledException)
@@ -864,13 +898,15 @@ public sealed partial class MainForm : Form
             CancellationToken token = _running.Token;
             UpgradeEngine engine = CreateEngine();
             _activeUpgrade = engine;
+            engine.ConfirmGroupAsync = ConfirmGroupContinuationAsync;
             MaintenanceRunResult result = await Task.Run(
-                () => engine.RunSequentialAsync(selected, new UpgradeRunOptions(behavior, retries), token), token);
+                () => engine.RunSequentialAsync(selected, new UpgradeRunOptions(behavior, retries, _upgradeWindowEnd, _canaryPerGroup), token), token);
             MaintenanceReportFiles reports = await new MaintenanceReportService(_store).WriteAsync(result, token);
             string outcome = engine.PauseRequested && result.Routers.Count < selected.Count ? "Paused after current router" : "Maintenance finished";
             string summary = $"{outcome}.\n\nSuccessful: {result.Successful}\nFailed: {result.Failed}\nNot processed: {selected.Count - result.Routers.Count}\n\nReports:\n{reports.CsvPath}\n{reports.PdfPath}";
             MessageBox.Show(summary, Text, MessageBoxButtons.OK,
                 result.Failed == 0 && result.Routers.Count == selected.Count ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
+            ShowRunSummary(result, selected);
         }
         catch (OperationCanceledException)
         {
@@ -909,18 +945,21 @@ public sealed partial class MainForm : Form
     private async void CreateSchedule(object? sender, EventArgs e)
     {
         if (_operationInProgress) return;
+        if (_scheduleWindow.Checked && _scheduleEnd.Value <= _scheduleTime.Value) { MessageBox.Show("Cutoff must be after the scheduled start."); return; }
         List<RouterRecord> selected = SelectedRouters();
         if (selected.Count == 0) { MessageBox.Show("Select the routers on the Routers tab first."); return; }
         var job = new UpgradeJob
         {
             Name = string.IsNullOrWhiteSpace(_jobName.Text) ? $"Maintenance {_scheduleTime.Value:dd-MM-yyyy HH:mm}" : _jobName.Text.Trim(),
             ScheduledLocalTime = _scheduleTime.Value,
+            WindowEnd = _scheduleWindow.Checked ? _scheduleEnd.Value : null,
             RouterIds = selected.Select(x => x.Id).ToList(),
             FailureBehavior = (FailureBehavior)(_failureBehavior.SelectedItem ?? FailureBehavior.RetryThenSkip),
             RetryCount = (int)_retryCount.Value
         };
         try
         {
+            SetBusy(true, "Registering schedule...");
             _jobs.Add(job); _store.SaveJobs(_jobs.ToList());
             await TaskSchedulerService.RegisterAsync(job);
             _jobGrid.Refresh();
@@ -930,6 +969,7 @@ public sealed partial class MainForm : Form
         {
             _jobs.Remove(job); _store.SaveJobs(_jobs.ToList()); ShowError(ex);
         }
+        finally { SetBusy(false, "Ready"); }
     }
 
     private UpgradeEngine CreateEngine()

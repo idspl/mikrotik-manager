@@ -8,6 +8,7 @@ public sealed class UpgradeEngine(SecureStore store, AppSettings settings)
     private readonly AppSettings _settings = settings;
     public event Action<string>? Message;
     public event Action<MaintenanceProgressUpdate>? Progress;
+    public Func<RouterRecord, CancellationToken, Task<bool>>? ConfirmGroupAsync { get; set; }
     public bool PauseRequested { get => _pauseRequested; set => _pauseRequested = value; }
     private volatile bool _pauseRequested;
     private MaintenanceHistory? _history;
@@ -23,13 +24,14 @@ public sealed class UpgradeEngine(SecureStore store, AppSettings settings)
     {
         DateTime runStarted = DateTime.Now;
         var results = new List<RouterRunResult>();
+        var testedGroups = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         routers = routers.ToList();
         _history = new MaintenanceHistory { RouterIds = routers.Select(x => x.Id).ToList(),
             FailureBehavior = options.FailureBehavior, RetryCount = options.RetryCount };
         _history.Save(_store);
         foreach (RouterRecord router in routers)
         {
-            if (PauseRequested) break;
+            if (PauseRequested || options.WindowEnd is { } end && DateTime.Now >= end) break;
             cancellationToken.ThrowIfCancellationRequested();
             _elapsed.Restart();
             DateTime started = DateTime.Now;
@@ -38,6 +40,7 @@ public sealed class UpgradeEngine(SecureStore store, AppSettings settings)
                 : 1;
             Exception? failure = null;
             bool completed = false;
+            string outcome = "Failed";
             int attempts = 0;
             for (int attempt = 1; attempt <= maximumAttempts; attempt++)
             {
@@ -49,9 +52,10 @@ public sealed class UpgradeEngine(SecureStore store, AppSettings settings)
                     RouterHealthCheck health = await PreflightAsync(router, cancellationToken);
                     if (!health.Passed) throw new InvalidOperationException(health.Summary);
                     bool changed = await RunRouterAsync(router, attempt, cancellationToken);
+                    outcome = changed ? "Upgraded successfully" : "Already current; verified";
                     failure = null;
                     router.LastStatus = "Completed";
-                    Report(router, "Completed", attempt, 100, "Completed", changed ? "Upgraded successfully" : "Already current; verified");
+                    Report(router, "Completed", attempt, 100, "Completed", outcome);
                     _history.CompletedIds.Add(router.Id);
                     _history.Save(_store);
                     completed = true;
@@ -79,7 +83,16 @@ public sealed class UpgradeEngine(SecureStore store, AppSettings settings)
 
             results.Add(new RouterRunResult(
                 router.Id, router.Name, router.Host, completed ? "Completed" : "Failed", attempts,
-                router.RouterOsVersion, router.FirmwareVersion, failure?.Message ?? "Completed", started, DateTime.Now));
+                router.RouterOsVersion, router.FirmwareVersion, failure?.Message ?? outcome, started, DateTime.Now));
+
+            if (options.CanaryPerGroup && testedGroups.Add(router.Group))
+            {
+                if (!completed) break;
+                bool moreInGroup = routers.Any(x => x.Id != router.Id && string.Equals(x.Group, router.Group, StringComparison.OrdinalIgnoreCase)
+                    && !results.Any(r => r.RouterId == x.Id));
+                if (moreInGroup && (ConfirmGroupAsync is null || !await ConfirmGroupAsync(router, cancellationToken)))
+                { PauseRequested = true; break; }
+            }
 
             if (!completed && options.FailureBehavior is FailureBehavior.Stop or FailureBehavior.RetryThenStop)
             {
@@ -116,6 +129,9 @@ public sealed class UpgradeEngine(SecureStore store, AppSettings settings)
             router.Model = snapshot.Model;
             router.RouterOsVersion = snapshot.RouterOsVersion;
             router.FirmwareVersion = snapshot.CurrentFirmware;
+            router.AvailableFirmware = snapshot.UpgradeFirmware;
+            router.LastCheckedAt = router.LastApiCheckAt = DateTime.Now;
+            await VerifyInterfacesAsync(api, router, 0, ct);
             router.FreeDiskBytes = freeBytes;
             router.TotalDiskBytes = totalBytes;
             router.RequiredFreeDiskMb = storage.RequiredFreeMb;
@@ -137,6 +153,7 @@ public sealed class UpgradeEngine(SecureStore store, AppSettings settings)
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             router.ApiStatus = "Failed";
+            router.LastApiCheckAt = DateTime.Now;
             return new RouterHealthCheck(router, false, ex.Message, null, 0, 0, _settings.MinimumFreeDiskMb, "fallback setting", DateTime.Now);
         }
     }
@@ -236,6 +253,11 @@ public sealed class UpgradeEngine(SecureStore store, AppSettings settings)
                 Log(router, "FIRMWARE", "RouterBOARD firmware is already current or not applicable");
                 Report(router, "Final verification", attempt, 95, "Running", "Firmware already current or not applicable");
             }
+            Report(router, "Interface verification", attempt, 97, "Running", "Verifying configured critical interfaces");
+            await VerifyInterfacesAsync(api, router, _settings.InterfaceRecoverySeconds, ct);
+            router.ApiStatus = "Online";
+            router.LastCheckedAt = router.LastApiCheckAt = DateTime.Now;
+            router.AvailableFirmware = (await GetSnapshotAsync(api, ct)).UpgradeFirmware;
         }
         finally { await api.DisposeAsync(); }
         Log(router, "DONE", "Upgrade and verification completed");
@@ -286,6 +308,22 @@ public sealed class UpgradeEngine(SecureStore store, AppSettings settings)
             }
         }
         throw new TimeoutException($"Router did not return after {phase} restart. Last error: {last?.Message}");
+    }
+
+    private static async Task VerifyInterfacesAsync(RouterOsApiClient api, RouterRecord router, int waitSeconds, CancellationToken ct)
+    {
+        string[] names = router.CriticalInterfaces.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries).Distinct().ToArray();
+        if (names.Length == 0) return;
+        DateTime deadline = DateTime.UtcNow.AddSeconds(waitSeconds);
+        while (true)
+        {
+            var replies = await api.ExecuteAsync("/interface/print", ct);
+            string[] down = names.Where(name => !replies.Any(r => r.Type == "!re" && r.Attributes.GetValueOrDefault("name") == name
+                && r.Attributes.GetValueOrDefault("running") == "true" && r.Attributes.GetValueOrDefault("disabled") != "true")).ToArray();
+            if (down.Length == 0) return;
+            if (DateTime.UtcNow >= deadline) throw new InvalidOperationException("Critical interfaces missing, disabled or not running: " + string.Join(", ", down));
+            await Task.Delay(TimeSpan.FromSeconds(2), ct);
+        }
     }
 
     private static async Task<RouterSnapshot> GetSnapshotAsync(RouterOsApiClient api, CancellationToken ct)

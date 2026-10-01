@@ -4,6 +4,8 @@ public sealed partial class MainForm
 {
     private UpgradeEngine? _activeUpgrade;
     private bool _updateInProgress;
+    private DateTime? _upgradeWindowEnd;
+    private bool _canaryPerGroup;
 
     private void PauseAfterRouter(object? sender, EventArgs e)
     {
@@ -125,10 +127,18 @@ public sealed partial class MainForm
             var grid = new DataGridView { Dock = DockStyle.Fill, ReadOnly = true, AllowUserToAddRows = false,
                 AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.DisplayedCells, DataSource = rows };
             var actions = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = 45, FlowDirection = FlowDirection.RightToLeft };
+            var controls = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = 64, AutoScroll = true };
+            var canary = new CheckBox { Text = "Test first router in each group; approve before continuing", AutoSize = true };
+            var window = new CheckBox { Text = "Stop starting routers after", AutoSize = true };
+            var end = new DateTimePicker { Format = DateTimePickerFormat.Custom, CustomFormat = "dd MMM yyyy HH:mm", Width = 175, Value = DateTime.Now.AddHours(2) };
+            controls.Controls.AddRange([canary, window, end]);
             actions.Controls.Add(new Button { Text = "Cancel", DialogResult = DialogResult.Cancel, AutoSize = true });
             actions.Controls.Add(new Button { Text = "Start Upgrade", DialogResult = DialogResult.OK, AutoSize = true });
-            dialog.Controls.Add(grid); dialog.Controls.Add(info); dialog.Controls.Add(actions);
-            return dialog.ShowDialog(this) == DialogResult.OK;
+            dialog.Controls.Add(grid); dialog.Controls.Add(info); dialog.Controls.Add(controls); dialog.Controls.Add(actions);
+            if (dialog.ShowDialog(this) != DialogResult.OK) return false;
+            if (window.Checked && end.Value <= DateTime.Now) { MessageBox.Show("The maintenance cutoff must be in the future."); return false; }
+            _canaryPerGroup = canary.Checked; _upgradeWindowEnd = window.Checked ? end.Value : null;
+            return true;
         }
         catch (OperationCanceledException) { return false; }
         catch (Exception ex) { ShowError(ex); return false; }

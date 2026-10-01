@@ -56,12 +56,45 @@ public sealed class SecureStore
         catch { return new(); }
     }
 
-    public void SaveSettings(AppSettings settings) => File.WriteAllText(SettingsPath, JsonSerializer.Serialize(settings, JsonOptions));
+    public void SaveSettings(AppSettings settings) => AtomicWrite(SettingsPath, JsonSerializer.SerializeToUtf8Bytes(settings, JsonOptions));
+
+    internal void ImportConfiguration(ConfigurationBundle bundle)
+    {
+        var previous = new ConfigurationBundle(1, LoadRouters(), LoadJobs(), LoadSettings());
+        SaveProtected(Path.Combine(RootDirectory, "before-import.dat"), previous);
+        string pending = Path.Combine(RootDirectory, "import-pending.dat");
+        SaveProtected(pending, bundle);
+        try { CompletePendingImport(); }
+        catch
+        {
+            SaveProtected(pending, previous);
+            CompletePendingImport();
+            throw;
+        }
+    }
+    internal void CompletePendingImport()
+    {
+        string path = Path.Combine(RootDirectory, "import-pending.dat");
+        if (!File.Exists(path)) return;
+        var bundle = LoadProtected<ConfigurationBundle>(path) ?? throw new InvalidDataException("Invalid pending import.");
+        SaveRouters(bundle.Routers); SaveJobs(bundle.Jobs); SaveSettings(bundle.Settings);
+        File.Delete(path);
+    }
+
+    private static void AtomicWrite(string path, byte[] bytes)
+    {
+        string temporary = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
+        try { File.WriteAllBytes(temporary, bytes); File.Move(temporary, path, true); }
+        finally { if (File.Exists(temporary)) File.Delete(temporary); }
+    }
 
     private static T? LoadProtected<T>(string path)
     {
         if (!File.Exists(path)) return default;
-        byte[] clear = Dpapi.Unprotect(File.ReadAllBytes(path));
+        using var input = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete);
+        using var bytes = new MemoryStream();
+        input.CopyTo(bytes);
+        byte[] clear = Dpapi.Unprotect(bytes.ToArray());
         try { return JsonSerializer.Deserialize<T>(clear, JsonOptions); }
         finally { Array.Clear(clear, 0, clear.Length); }
     }
@@ -69,7 +102,7 @@ public sealed class SecureStore
     private static void SaveProtected<T>(string path, T value)
     {
         byte[] clear = JsonSerializer.SerializeToUtf8Bytes(value, JsonOptions);
-        try { File.WriteAllBytes(path, Dpapi.Protect(clear)); }
+        try { AtomicWrite(path, Dpapi.Protect(clear)); }
         finally { Array.Clear(clear, 0, clear.Length); }
     }
 }

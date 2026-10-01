@@ -74,6 +74,8 @@ public sealed class RouterBackupService(AppSettings settings)
                     (backupBytes, backupHash) = await VerifyFileAsync(localBackup, cancellationToken);
                     (exportBytes, exportHash) = await VerifyFileAsync(localExport, cancellationToken);
                     verification = "Verified size and SHA-256";
+                    router.Backups.Add(new BackupHistoryEntry(DateTime.Now, localBackup, localExport,
+                        backupHash, exportHash, verification));
                     verified++;
                     router.LastStatus = "Backup downloaded";
                     result = "Success";
