@@ -1,4 +1,4 @@
-# MikroTik Manager 0.2.4
+# MikroTik Manager 0.2.5
 
 [![Windows build](https://github.com/idspl/mikrotik-manager/actions/workflows/windows-build.yml/badge.svg)](https://github.com/idspl/mikrotik-manager/actions/workflows/windows-build.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -36,6 +36,13 @@ MikroTik Manager is currently distributed without a paid Authenticode certificat
 Do not run the file if it came from another website, the checksum differs, VirusTotal reports multiple credible detections, or the release cannot be matched to this repository. A single generic or heuristic detection can be a false positive; investigate it rather than assuming either safety or infection.
 
 Use a test router before production deployment. Router upgrades, reboots and sensitive configuration exports can interrupt services or expose credentials if operated without appropriate controls.
+
+## 0.2.5 faster version checks and release visibility
+
+- Fetch Current Versions queries up to eight routers concurrently, updates rows as results arrive, and preserves completed results when cancelled.
+- The router screen shows Latest Stable, Latest Long-term and Latest Testing from MikroTik's official downloads page. It refreshes at startup or with Refresh, shows the check time, and marks retained values stale if a refresh fails. These are website channel listings, not a device-specific upgrade recommendation.
+- Confirmed upgrades, retries and resumed queues automatically open Maintenance Progress. You can still switch tabs during a job.
+- From 0.2.4, use Help > Check for Updates to download, verify and install this version. Older versions require manual EXE replacement.
 
 ## 0.2.4 maintenance controls and self-update
 
