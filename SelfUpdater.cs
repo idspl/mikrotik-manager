@@ -52,6 +52,15 @@ internal static class SelfUpdater
         return Convert.ToHexString(SHA256.HashData(input));
     }
 
+    internal static void ReplaceVerified(string download, string target, string expectedHash, string stage, string backup)
+    {
+        if (target.Equals(download, StringComparison.OrdinalIgnoreCase) || !Hash(download).Equals(expectedHash, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("Update validation failed.");
+        File.Copy(download, stage, false);
+        if (!Hash(stage).Equals(expectedHash, StringComparison.OrdinalIgnoreCase)) throw new InvalidOperationException("Staged checksum mismatch.");
+        File.Replace(stage, target, backup, true);
+    }
+
     public static void StartReplacement(string downloaded)
     {
         string target = Environment.ProcessPath ?? throw new InvalidOperationException("Application path unavailable.");
@@ -83,11 +92,7 @@ internal static class SelfUpdater
             catch (ArgumentException) { /* Parent already exited. */ }
             try { held = mutex.WaitOne(0); } catch (AbandonedMutexException) { held = true; }
             if (!held) throw new InvalidOperationException("Another application or scheduled job is running. Update aborted.");
-            if (target.Equals(download, StringComparison.OrdinalIgnoreCase) || !Hash(download).Equals(args[3], StringComparison.OrdinalIgnoreCase))
-                throw new InvalidOperationException("Update validation failed.");
-            File.Copy(download, stage, false);
-            if (!Hash(stage).Equals(args[3], StringComparison.OrdinalIgnoreCase)) throw new InvalidOperationException("Staged checksum mismatch.");
-            File.Replace(stage, target, backup, true);
+            ReplaceVerified(download, target, args[3], stage, backup);
             replaced = true;
             mutex.ReleaseMutex(); held = false;
             _ = Process.Start(new ProcessStartInfo(target) { UseShellExecute = true, WorkingDirectory = Path.GetDirectoryName(target)! })
