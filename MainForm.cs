@@ -669,26 +669,64 @@ public sealed partial class MainForm : Form
         if (selected.Count == 0) { MessageBox.Show("Select at least one router."); return; }
         SetBusy(true, "Fetching current RouterOS and firmware versions...");
         _running = new CancellationTokenSource();
+        CancellationToken token = _running.Token;
+        int next = 0, completed = 0, failed = 0;
+        string summary = "Version fetch cancelled";
         try
         {
             var engine = CreateEngine();
-            foreach (RouterRecord router in selected)
+            // Async workers retain the WinForms context for all bound-model/UI writes.
+            // Each request owns its API connection. A slow router occupies only one slot.
+            async Task WorkerAsync()
             {
-                router.LastStatus = "Fetching versions"; _routerGrid.Refresh();
-                try
+                while (next < selected.Count)
                 {
-                    RouterSnapshot result = await engine.TestAndReadAsync(router, _running.Token);
-                    router.ApiStatus = "Online";
-                    router.Model = result.Model;
-                    router.RouterOsVersion = result.RouterOsVersion;
-                    router.FirmwareVersion = result.CurrentFirmware;
-                    router.LastStatus = "Versions fetched";
+                    token.ThrowIfCancellationRequested();
+                    RouterRecord router = selected[next++];
+                    router.LastStatus = "Fetching versions";
+                    _routerGrid.Invalidate();
+                    try
+                    {
+                        RouterSnapshot result = await engine.TestAndReadAsync(router, token);
+                        token.ThrowIfCancellationRequested();
+                        router.ApiStatus = "Online";
+                        router.Model = result.Model;
+                        router.RouterOsVersion = result.RouterOsVersion;
+                        router.FirmwareVersion = result.CurrentFirmware;
+                        router.LastStatus = "Versions fetched";
+                    }
+                    catch (OperationCanceledException) when (token.IsCancellationRequested)
+                    {
+                        router.LastStatus = "Version fetch cancelled";
+                        throw;
+                    }
+                    catch (Exception ex)
+                    {
+                        router.ApiStatus = "Failed";
+                        router.LastStatus = "Test failed: " + ex.Message;
+                        failed++;
+                    }
+                    completed++;
+                    _status.Text = $"Versions: {completed} of {selected.Count} completed; {failed} failed";
+                    _routerGrid.Invalidate();
                 }
-                catch (Exception ex) { router.ApiStatus = "Failed"; router.LastStatus = "Test failed: " + ex.Message; }
-                _routerGrid.Refresh(); SaveRouters();
             }
+            await Task.WhenAll(Enumerable.Range(0, Math.Min(8, selected.Count)).Select(_ => WorkerAsync()));
+            summary = $"Versions: {completed} of {selected.Count} completed; {failed} failed";
         }
-        finally { SetBusy(false, "Ready"); _running.Dispose(); _running = null; }
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
+        {
+            summary = $"Version fetch cancelled: {completed} of {selected.Count} completed; {failed} failed";
+        }
+        catch (Exception ex) { summary = "Version fetch failed"; ShowError(ex); }
+        finally
+        {
+            try { SaveRouters(); }
+            catch (Exception ex) { ShowError(ex); }
+            _routerGrid.Invalidate();
+            SetBusy(false, summary);
+            _running.Dispose(); _running = null;
+        }
     }
 
     private async void CheckApiStatusSelected(object? sender, EventArgs e)
