@@ -6,6 +6,8 @@ namespace MikroTikManager;
 public sealed partial class MainForm : Form
 {
     private readonly IContainer _components = new Container();
+    private readonly TabControl _tabs = new() { Dock = DockStyle.Fill };
+    private TabPage _maintenancePage = null!;
     private readonly SecureStore _store = new();
     private readonly SortableBindingList<RouterRecord> _routers;
     private readonly BindingList<UpgradeJob> _jobs;
@@ -65,9 +67,10 @@ public sealed partial class MainForm : Form
 
     private void BuildUi()
     {
-        var tabs = new TabControl { Dock = DockStyle.Fill };
+        var tabs = _tabs;
         tabs.TabPages.Add(BuildRoutersPage());
-        tabs.TabPages.Add(BuildMaintenancePage());
+        _maintenancePage = BuildMaintenancePage();
+        tabs.TabPages.Add(_maintenancePage);
         tabs.TabPages.Add(BuildSchedulesPage());
         tabs.TabPages.Add(BuildLogsPage());
         tabs.TabPages.Add(BuildSettingsPage());
@@ -853,6 +856,7 @@ public sealed partial class MainForm : Form
         _lastUpgradeRouterIds = selected.Select(x => x.Id).ToList();
         PrepareProgressRows(selected);
         SetBusy(true, "Upgrade running...");
+        _tabs.SelectedTab = _maintenancePage;
         _running = new CancellationTokenSource();
         DateTime started = DateTime.Now;
         try
