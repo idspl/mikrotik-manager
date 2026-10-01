@@ -1,4 +1,4 @@
-# MikroTik Manager 0.2.3
+# MikroTik Manager 0.2.4
 
 [![Windows build](https://github.com/idspl/mikrotik-manager/actions/workflows/windows-build.yml/badge.svg)](https://github.com/idspl/mikrotik-manager/actions/workflows/windows-build.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -36,6 +36,20 @@ MikroTik Manager is currently distributed without a paid Authenticode certificat
 Do not run the file if it came from another website, the checksum differs, VirusTotal reports multiple credible detections, or the release cannot be matched to this repository. A single generic or heuristic detection can be a false positive; investigate it rather than assuming either safety or infection.
 
 Use a test router before production deployment. Router upgrades, reboots and sensitive configuration exports can interrupt services or expose credentials if operated without appropriate controls.
+
+## 0.2.4 maintenance controls and self-update
+
+- **Right-click > Edit Credentials:** change the saved username/password, optionally test API login, then save with DPAPI encryption. A blank new-password field preserves the saved password; an explicit checkbox permits an empty password. This does not modify accounts on the router.
+- **Upgrade > Pause After Current Router:** completes the current router and its configured retries, then ends the queue. Use Resume Incomplete Queue to continue after reviewing a fresh preview.
+- **Upgrade > Maintenance History:** encrypted, atomically saved stage history under `C:\ProgramData\MikroTik Manager\History`. Each stage includes timestamps, attempt, versions and result. The newest run's incomplete queue is restored after restart; no router operation resumes automatically.
+- Every interactive upgrade/retry/resume shows a live readiness preview and exact queue order. The RouterOS target is resolved at execution, not pinned. Safety backups are on-router `preupgrade-*` files; use Backup Selected for local copies.
+- Progress shows elapsed time, numbered reconnect attempts, a stability countdown and an Already current outcome. Percentages are stage estimates, not measured download progress.
+- **Help > Check for Updates:** download the official GitHub EXE and its SHA-256 checksum, verify, then confirm install/restart. Startup checks use the same flow when enabled. Updates preserve the executable path, settings and scheduled-task paths; the previous EXE is retained as `.previous`.
+- The updater needs write access to the EXE folder and does not silently elevate. If access is denied, replace the EXE manually or run from an appropriate writable folder. Downloaded updates remain unsigned; a checksum is not a malware scan or digital signature.
+- Only one app/scheduled-job process can run at a time to avoid update/maintenance collisions. Close the desktop app before unattended scheduled jobs; a conflicting scheduled launch exits with code 2. Update and close actions are blocked during maintenance. Cancellation cannot undo a command already sent to a router.
+- PPPoE-specific checks are intentionally excluded. This release retains general RouterOS/API checks for routers and switches.
+
+Install 0.2.4 manually once to gain the self-updater for later releases. No change to the installed application is made until you confirm restart.
 
 ## 0.2.3 live upgrade-stage status
 

@@ -14,13 +14,13 @@ public sealed class SecureStore
     private string JobsPath => Path.Combine(RootDirectory, "jobs.dat");
     private string SettingsPath => Path.Combine(RootDirectory, "settings.json");
 
-    public SecureStore()
+    public SecureStore(string? rootDirectory = null)
     {
         string commonData = Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData);
-        RootDirectory = Path.Combine(commonData, "MikroTik Manager");
+        RootDirectory = rootDirectory ?? Path.Combine(commonData, "MikroTik Manager");
         Directory.CreateDirectory(RootDirectory);
         Directory.CreateDirectory(LogDirectory);
-        TryMigrateLegacyData(Path.Combine(commonData, "Indigo Router Scheduler"));
+        if (rootDirectory is null) TryMigrateLegacyData(Path.Combine(commonData, "Indigo Router Scheduler"));
     }
 
     private void TryMigrateLegacyData(string legacyDirectory)

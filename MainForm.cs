@@ -3,7 +3,7 @@ using System.Diagnostics;
 
 namespace MikroTikManager;
 
-public sealed class MainForm : Form
+public sealed partial class MainForm : Form
 {
     private readonly IContainer _components = new Container();
     private readonly SecureStore _store = new();
@@ -32,7 +32,7 @@ public sealed class MainForm : Form
     public MainForm()
     {
         _routerContextMenu = new ContextMenuStrip(_components);
-        Text = "MikroTik Manager 0.2.3";
+        Text = "MikroTik Manager 0.2.4";
         Icon = AppIcon.Current;
         Width = 1280;
         Height = 720;
@@ -44,10 +44,20 @@ public sealed class MainForm : Form
         BuildUi();
         DragEnter += MainFormDragEnter;
         DragDrop += MainFormDragDrop;
-        FormClosing += (_, _) => SaveAll();
+        FormClosing += (_, e) =>
+        {
+            if (_operationInProgress || _updateInProgress)
+            {
+                e.Cancel = true;
+                MessageBox.Show("Wait for the current operation to finish. For upgrades, use Pause After Current Router first.");
+                return;
+            }
+            SaveAll();
+        };
         Shown += async (_, _) =>
         {
             _routerGrid.ClearSelection();
+            RestoreIncompleteQueue();
             if (_store.LoadSettings().CheckForUpdatesAtStartup) await CheckForUpdatesAsync(false);
         };
     }
@@ -114,14 +124,16 @@ public sealed class MainForm : Form
         var upgradeMenu = new ToolStripDropDownButton("Upgrade");
         upgradeMenu.DropDownItems.Add("Upgrade Selected Routers...", null, RunNow);
         upgradeMenu.DropDownItems.Add("Resume Incomplete Queue", null, ResumeIncomplete);
+        upgradeMenu.DropDownItems.Add("Pause After Current Router", null, PauseAfterRouter);
+        upgradeMenu.DropDownItems.Add("Maintenance History", null, ShowHistory);
         upgradeMenu.DropDownItems.Add(new ToolStripSeparator());
         upgradeMenu.DropDownItems.Add("Cancel Current Operation", null, (_, _) => _running?.Cancel());
 
         var updatesMenu = new ToolStripDropDownButton("Help") { Alignment = ToolStripItemAlignment.Right };
         updatesMenu.DropDownItems.Add("Check for Updates", null, async (_, _) => await CheckForUpdatesAsync(true));
         updatesMenu.DropDownItems.Add(new ToolStripSeparator());
-        updatesMenu.DropDownItems.Add("About MikroTik Manager 0.2.3", null, (_, _) =>
-            MessageBox.Show("MikroTik Manager 0.2.3\n\nMade for MikroTik\nIndependent open-source software by Indigo Data Services Pvt Ltd.", Text,
+        updatesMenu.DropDownItems.Add("About MikroTik Manager 0.2.4", null, (_, _) =>
+            MessageBox.Show("MikroTik Manager 0.2.4\n\nMade for MikroTik\nIndependent open-source software by Indigo Data Services Pvt Ltd.", Text,
                 MessageBoxButtons.OK, MessageBoxIcon.Information));
         actions.Items.AddRange([inventoryMenu, selectionMenu, groupMenu, maintenanceMenu, upgradeMenu, updatesMenu]);
 
@@ -204,6 +216,7 @@ public sealed class MainForm : Form
         _groupSelector.DropDown += (_, _) => RefreshGroupChoices();
         RefreshGroupChoices();
         _routerContextMenu.Items.Add("Check API Status", null, CheckApiStatusSelected);
+        _routerContextMenu.Items.Add("Edit Credentials...", null, EditCredentials);
         _routerContextMenu.Items.Add("Pre-Upgrade Check", null, RunPreflightSelected);
         _routerContextMenu.Items.Add("Fetch Current Versions", null, FetchCurrentVersions);
         _routerContextMenu.Items.Add("Backup Router...", null, BackupSelectedRouters);
@@ -221,6 +234,8 @@ public sealed class MainForm : Form
         var page = new TabPage("Maintenance Progress");
         var bar = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 46, Padding = new Padding(8), WrapContents = false };
         bar.Controls.Add(Button("Retry Failed", RetryFailed));
+        bar.Controls.Add(Button("Pause After Current Router", PauseAfterRouter));
+        bar.Controls.Add(Button("History", ShowHistory));
         bar.Controls.Add(Button("Open Reports Folder", OpenReportsFolder));
         bar.Controls.Add(Button("Cancel Current Job", (_, _) => _running?.Cancel()));
         bar.Controls.Add(new Label { Text = "Live progress remains interactive while maintenance is running.", AutoSize = true, ForeColor = Color.DimGray, Padding = new Padding(8, 7, 0, 0) });
@@ -792,6 +807,8 @@ public sealed class MainForm : Form
 
     private async Task RunUpgradeAsync(List<RouterRecord> selected, FailureBehavior behavior, int retries)
     {
+        if (!await PreviewUpgradeAsync(selected, behavior, retries)) return;
+        SaveRouters();
         _lastUpgradeRouterIds = selected.Select(x => x.Id).ToList();
         PrepareProgressRows(selected);
         SetBusy(true, "Upgrade running...");
@@ -801,10 +818,12 @@ public sealed class MainForm : Form
         {
             CancellationToken token = _running.Token;
             UpgradeEngine engine = CreateEngine();
+            _activeUpgrade = engine;
             MaintenanceRunResult result = await Task.Run(
                 () => engine.RunSequentialAsync(selected, new UpgradeRunOptions(behavior, retries), token), token);
             MaintenanceReportFiles reports = await new MaintenanceReportService(_store).WriteAsync(result, token);
-            string summary = $"Maintenance completed.\n\nSuccessful: {result.Successful}\nFailed: {result.Failed}\nNot processed: {selected.Count - result.Routers.Count}\n\nReports:\n{reports.CsvPath}\n{reports.PdfPath}";
+            string outcome = engine.PauseRequested && result.Routers.Count < selected.Count ? "Paused after current router" : "Maintenance finished";
+            string summary = $"{outcome}.\n\nSuccessful: {result.Successful}\nFailed: {result.Failed}\nNot processed: {selected.Count - result.Routers.Count}\n\nReports:\n{reports.CsvPath}\n{reports.PdfPath}";
             MessageBox.Show(summary, Text, MessageBoxButtons.OK,
                 result.Failed == 0 && result.Routers.Count == selected.Count ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
         }
@@ -817,6 +836,7 @@ public sealed class MainForm : Form
         catch (Exception ex) { ShowError(ex); }
         finally
         {
+            _activeUpgrade = null;
             SaveRouters(); _routerGrid.Refresh(); ApplyRouterFilter(); SetBusy(false, "Ready");
             _running.Dispose(); _running = null;
         }
@@ -835,7 +855,8 @@ public sealed class MainForm : Form
     {
         if (_operationInProgress) return;
         HashSet<Guid> completed = _progressRows.Where(x => x.Result == "Completed").Select(x => x.RouterId).ToHashSet();
-        List<RouterRecord> routers = _routers.Where(x => _lastUpgradeRouterIds.Contains(x.Id) && !completed.Contains(x.Id)).ToList();
+        List<RouterRecord> routers = _lastUpgradeRouterIds.Where(id => !completed.Contains(id))
+            .Select(id => _routers.FirstOrDefault(x => x.Id == id)).OfType<RouterRecord>().ToList();
         if (routers.Count == 0) { MessageBox.Show("There is no incomplete upgrade queue to resume."); return; }
         await RunUpgradeAsync(routers, (FailureBehavior)(_failureBehavior.SelectedItem ?? FailureBehavior.RetryThenSkip), (int)_retryCount.Value);
     }
@@ -921,7 +942,7 @@ public sealed class MainForm : Form
 
     private static string RouterGridStatus(MaintenanceProgressUpdate update)
     {
-        if (update.Result == "Completed") return "Completed";
+        if (update.Result == "Completed") return update.Message.StartsWith("Already current") ? "Already current; verified" : "Completed: upgraded successfully";
         if (update.Result == "Failed") return "Failed: " + update.Message;
         if (update.Result == "Cancelled") return "Cancelled";
         if (update.Result == "Retrying") return "Retrying: " + update.Message;
@@ -968,15 +989,29 @@ public sealed class MainForm : Form
 
     private async Task CheckForUpdatesAsync(bool showCurrent)
     {
+        if (_operationInProgress || _updateInProgress) { if (showCurrent) MessageBox.Show("Finish maintenance before updating the application."); return; }
+        _updateInProgress = true;
+        SetBusy(true, "Checking for application updates...");
         try
         {
             using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(15));
             UpdateCheckResult result = await UpdateChecker.CheckAsync(timeout.Token);
             if (result.IsNewer)
             {
-                if (MessageBox.Show($"MikroTik Manager {result.Version} is available.\n\nOpen the GitHub release page?", Text,
+                if (MessageBox.Show($"MikroTik Manager {result.Version} is available.\n\nDownload and verify the new EXE? The current executable path and saved data will be preserved.\n\nReleases are unsigned; checksum validation verifies the published file, not that it is malware-free.", Text,
                     MessageBoxButtons.YesNo, MessageBoxIcon.Information) == DialogResult.Yes)
-                    Process.Start(new ProcessStartInfo(result.Url) { UseShellExecute = true });
+                {
+                    _status.Text = "Downloading and verifying update; please wait...";
+                    using var downloadTimeout = new CancellationTokenSource(TimeSpan.FromMinutes(10));
+                    string downloaded = await SelfUpdater.DownloadAsync(result.Version, downloadTimeout.Token);
+                    if (MessageBox.Show("Checksum verified. Install and restart now?\n\nThe previous EXE will be kept as .previous. No router data will be removed.", Text,
+                        MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
+                    {
+                        SaveAll();
+                        SelfUpdater.StartReplacement(downloaded);
+                        _updateInProgress = false; SetBusy(false, "Restarting..."); Close();
+                    }
+                }
             }
             else if (showCurrent)
             {
@@ -985,6 +1020,7 @@ public sealed class MainForm : Form
         }
         catch (Exception ex) when (!showCurrent && ex is not OperationCanceledException) { }
         catch (Exception ex) { MessageBox.Show("Could not check GitHub releases: " + ex.Message, Text, MessageBoxButtons.OK, MessageBoxIcon.Warning); }
+        finally { _updateInProgress = false; if (!IsDisposed) SetBusy(false, "Ready"); }
     }
 
     private static string FriendlyBehavior(FailureBehavior behavior) => behavior switch
