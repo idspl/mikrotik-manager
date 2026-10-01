@@ -56,6 +56,7 @@ public sealed partial class MainForm : Form
         };
         Shown += async (_, _) =>
         {
+            _ = RefreshRouterOsReleasesAsync();
             _routerGrid.ClearSelection();
             RestoreIncompleteQueue();
             if (_store.LoadSettings().CheckForUpdatesAtStartup) await CheckForUpdatesAsync(false);
@@ -82,14 +83,15 @@ public sealed partial class MainForm : Form
         var header = new TableLayoutPanel
         {
             Dock = DockStyle.Top,
-            Height = 72,
-            RowCount = 2,
+            Height = 104,
+            RowCount = 3,
             ColumnCount = 1,
             BackColor = Color.FromArgb(245, 247, 250),
             Padding = new Padding(4, 3, 4, 3)
         };
         header.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
         header.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
+        header.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
 
         var actions = new ToolStrip
         {
@@ -167,6 +169,7 @@ public sealed partial class MainForm : Form
 
         header.Controls.Add(actions, 0, 0);
         header.Controls.Add(filters, 0, 1);
+        header.Controls.Add(BuildRouterOsReleaseStrip(), 0, 2);
 
         _routerGrid.Dock = DockStyle.Fill;
         _routerGrid.AutoGenerateColumns = false;
