@@ -9,19 +9,31 @@ public sealed class ManualRouterDialog : Form
     private readonly TextBox _username = new() { Width = 220 };
     private readonly TextBox _password = new() { Width = 220, UseSystemPasswordChar = true };
     public RouterRecord? Router { get; private set; }
+    private readonly RouterRecord? _existing;
+    private readonly TextBox _interfaces = new() { Width = 280, PlaceholderText = "Optional: ether1, bridge-lan" };
+    private readonly CheckBox _emptyPassword = new() { Text = "Use empty password", AutoSize = true };
 
-    public ManualRouterDialog(int defaultApiPort)
+    public ManualRouterDialog(int defaultApiPort, RouterRecord? existing = null)
     {
+        _existing = existing;
         Icon = AppIcon.Current;
         Text = "Add Router Manually";
         Width = 570;
-        Height = 395;
+        Height = 480;
         StartPosition = FormStartPosition.CenterParent;
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = false;
         MinimizeBox = false;
         _apiPort.Value = Math.Clamp(defaultApiPort, 1, 65535);
         _username.Text = "admin";
+        if (existing is not null)
+        {
+            Text = "Edit Router";
+            _name.Text = existing.Name; _group.Text = existing.Group; _address.Text = existing.Host;
+            _apiPort.Value = existing.ApiPort; _username.Text = existing.Username;
+            _interfaces.Text = existing.CriticalInterfaces;
+            _password.PlaceholderText = "Blank keeps saved password";
+        }
 
         var table = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(18), ColumnCount = 2, RowCount = 8 };
         table.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 190));
@@ -40,15 +52,17 @@ public sealed class ManualRouterDialog : Form
             ForeColor = Color.DimGray,
             Padding = new Padding(0, 6, 0, 8)
         };
-        table.Controls.Add(note, 1, 6);
+        AddRow(table, 6, "Critical interfaces (comma separated)", _interfaces);
+        table.Controls.Add(_emptyPassword, 1, 7);
+        table.Controls.Add(note, 1, 8);
 
-        var add = new Button { Text = "Add Router", AutoSize = true };
+        var add = new Button { Text = existing is null ? "Add Router" : "Save Router", AutoSize = true };
         add.Click += (_, _) => AcceptRouter();
         var cancel = new Button { Text = "Cancel", AutoSize = true, DialogResult = DialogResult.Cancel };
         var buttons = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.RightToLeft, Dock = DockStyle.Fill };
         buttons.Controls.Add(cancel);
         buttons.Controls.Add(add);
-        table.Controls.Add(buttons, 1, 7);
+        table.Controls.Add(buttons, 1, 9);
         Controls.Add(table);
         AcceptButton = add;
         CancelButton = cancel;
@@ -61,7 +75,7 @@ public sealed class ManualRouterDialog : Form
             ParsedRouterAddress endpoint = RouterAddressParser.Parse(_address.Text);
             if (string.IsNullOrWhiteSpace(_username.Text))
                 throw new ArgumentException("Username is required.");
-            string password = _password.Text;
+            string password = _emptyPassword.Checked ? "" : _existing is not null && _password.Text.Length == 0 ? _existing.Password : _password.Text;
             Router = new RouterRecord
             {
                 Name = string.IsNullOrWhiteSpace(_name.Text) ? endpoint.Host : _name.Text.Trim(),
@@ -70,6 +84,7 @@ public sealed class ManualRouterDialog : Form
                 ApiPort = endpoint.ExplicitPort ?? (int)_apiPort.Value,
                 Username = _username.Text.Trim(),
                 Password = password,
+                CriticalInterfaces = _interfaces.Text.Trim(),
                 BackupPassword = string.IsNullOrEmpty(password)
                     ? Convert.ToHexString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(18))
                     : password

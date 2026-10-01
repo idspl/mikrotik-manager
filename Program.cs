@@ -18,16 +18,26 @@ internal static class Program
         try { owned = instance.WaitOne(0); } catch (AbandonedMutexException) { owned = true; }
         if (!owned)
         {
-            if (args.Contains("--run-job"))
+            if (args.Length == 2 && args[0] == "--run-job" && Guid.TryParse(args[1], out Guid queuedJob))
             {
-                // Task Scheduler records a failure instead of silently reporting success.
-                Environment.ExitCode = 2;
+                var waitingStore = new SecureStore();
+                DateTime deadline = DateTime.UtcNow.AddHours(24);
+                while (!owned && DateTime.UtcNow < deadline)
+                {
+                    var job = waitingStore.LoadJobs().FirstOrDefault(x => x.Id == queuedJob);
+                    if (job is null) { Environment.ExitCode = 2; return; }
+                    if (job.State != "Scheduled" && job.State != "Running")
+                    { Environment.ExitCode = job.State == "Completed" ? 0 : 2; return; }
+                    try { owned = instance.WaitOne(TimeSpan.FromSeconds(2)); }
+                    catch (AbandonedMutexException) { owned = true; }
+                }
+                if (!owned) { Environment.ExitCode = 2; return; }
             }
-            else MessageBox.Show("MikroTik Manager or a scheduled job is already running. Close it before starting another instance.");
-            return;
+            else { MessageBox.Show("MikroTik Manager or a scheduled job is already running."); return; }
         }
         try
         {
+            new SecureStore().CompletePendingImport();
             if (args.Length == 2 && args[0].Equals("--run-job", StringComparison.OrdinalIgnoreCase) && Guid.TryParse(args[1], out Guid jobId))
             {
                 Task.Run(() => RunScheduledJobAsync(jobId)).GetAwaiter().GetResult();
@@ -59,7 +69,8 @@ internal static class Program
         var store = new SecureStore();
         List<UpgradeJob> jobs = store.LoadJobs();
         UpgradeJob? job = jobs.FirstOrDefault(x => x.Id == jobId);
-        if (job is null) return;
+        if (job is null || job.State != "Scheduled") { Environment.ExitCode = job?.State == "Completed" ? 0 : 2; return; }
+        if (job.ScheduledLocalTime > DateTime.Now) { Environment.ExitCode = 2; return; }
         job.State = "Running";
         job.StartedAt = DateTime.Now;
         store.SaveJobs(jobs);
@@ -67,9 +78,10 @@ internal static class Program
         var selected = job.RouterIds.Select(id => routers.FirstOrDefault(x => x.Id == id)).Where(x => x is not null).Cast<RouterRecord>().ToList();
         try
         {
+            if (selected.Count == 0 || selected.Count != job.RouterIds.Count) throw new InvalidOperationException("Scheduled routers are missing or empty.");
             var engine = new UpgradeEngine(store, store.LoadSettings());
             MaintenanceRunResult result = await engine.RunSequentialAsync(selected,
-                new UpgradeRunOptions(job.FailureBehavior, job.RetryCount), CancellationToken.None);
+                new UpgradeRunOptions(job.FailureBehavior, job.RetryCount, job.WindowEnd), CancellationToken.None);
             await new MaintenanceReportService(store).WriteAsync(result);
             job.State = result.Failed == 0 && result.Routers.Count == selected.Count
                 ? "Completed"
@@ -84,6 +96,7 @@ internal static class Program
             job.CompletedAt = DateTime.Now;
             store.SaveRouters(routers);
             store.SaveJobs(jobs);
+            Environment.ExitCode = job.State == "Completed" ? 0 : 2;
         }
     }
 }

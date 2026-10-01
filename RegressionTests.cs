@@ -27,6 +27,24 @@ internal static class RegressionTests
         catch (FormatException) { invalidReleasePage = true; }
         Check(invalidReleasePage, "Website changes must not display fabricated versions");
         var router = new RouterRecord { Name = "Fixture", Username = "test", Password = "fixture-password" };
+        router.Host = "192.0.2.1";
+        var bundle = new ConfigurationBundle(1, [router], [], new AppSettings());
+        byte[] archive = ConfigurationArchive.Encrypt(bundle, "test-export-password");
+        Check(!Encoding.UTF8.GetString(archive).Contains(router.Password), "Archive secrets encrypted");
+        Check(ConfigurationArchive.Decrypt(archive, "test-export-password").Routers[0].Password == router.Password, "Portable archive roundtrip");
+        bool wrongPassword = false;
+        try { ConfigurationArchive.Decrypt(archive, "wrong-password"); } catch (System.Security.Cryptography.CryptographicException) { wrongPassword = true; }
+        Check(wrongPassword, "Reject incorrect archive password");
+        archive[^1] ^= 1;
+        bool tamperRejected = false;
+        try { ConfigurationArchive.Decrypt(archive, "test-export-password"); } catch (System.Security.Cryptography.CryptographicException) { tamperRejected = true; }
+        Check(tamperRejected, "Reject modified archive");
+        store.ImportConfiguration(bundle);
+        Check(store.LoadRouters()[0].Id == router.Id && !File.Exists(Path.Combine(directory, "import-pending.dat")), "Import transaction completed");
+        Check(ReleaseVersion.IsNewerSameMajor("7.24.5", "7.24.4 (stable)"), "Version comparison accepts RouterOS suffix");
+        Check(!ReleaseVersion.IsNewerSameMajor("7.24.5", "6.49.22"), "No automatic major upgrade selection");
+        Check(!ReleaseVersion.IsNewerSameMajor("7.24rc4", "7.24"), "Do not select release candidate below stable");
+        Check(ReleaseVersion.IsNewerSameMajor("7.24rc4", "7.24beta9"), "Release candidate ranks after beta");
         store.SaveRouters([router]);
         Check(store.LoadRouters().Single().Password == router.Password, "DPAPI credentials roundtrip");
         Check(!Encoding.UTF8.GetString(File.ReadAllBytes(Path.Combine(directory, "routers.dat"))).Contains(router.Password), "Credentials must not be plaintext");
@@ -38,6 +56,9 @@ internal static class RegressionTests
         Check(MaintenanceHistory.Load(store).Single().CompletedIds.Contains(router.Id), "Atomic history replacement");
         // Pause before the first router must never attempt an API connection.
         var engine = new UpgradeEngine(store, new AppSettings()) { PauseRequested = true };
+        var expired = await new UpgradeEngine(store, new AppSettings()).RunSequentialAsync([router],
+            new UpgradeRunOptions(FailureBehavior.Stop, 0, DateTime.Now.AddMinutes(-1)), CancellationToken.None);
+        Check(expired.Routers.Count == 0, "Expired maintenance window must not connect to routers");
         var result = await engine.RunSequentialAsync([router], CancellationToken.None);
         Check(result.Routers.Count == 0, "Pause must prevent starting next router");
         Check(MaintenanceHistory.Load(store).First().State == "Paused", "Pause state persisted");

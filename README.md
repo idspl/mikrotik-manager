@@ -1,4 +1,4 @@
-# MikroTik Manager 0.2.5
+# MikroTik Manager 0.3.0
 
 [![Windows build](https://github.com/idspl/mikrotik-manager/actions/workflows/windows-build.yml/badge.svg)](https://github.com/idspl/mikrotik-manager/actions/workflows/windows-build.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -37,6 +37,20 @@ Do not run the file if it came from another website, the checksum differs, Virus
 
 Use a test router before production deployment. Router upgrades, reboots and sensitive configuration exports can interrupt services or expose credentials if operated without appropriate controls.
 
+## 0.3.0 inventory freshness and maintenance controls
+
+- API status resets to Not checked at startup. Saved versions remain visible with their last-check time. Settings controls the default-on startup API/version refresh (eight concurrent queries). Cancel retains successful results. Startup refresh and maintenance do not run concurrently.
+- Inventory / right-click > Edit Router changes name, host, API port, group, credentials and optional critical interfaces. A blank edit password keeps the saved password; Use empty password explicitly clears it. It never changes the router's user accounts.
+- Selection > Select Outdated Routers compares visible online routers against the configured website release channel and available firmware. It selects only newer versions within the same major branch, never guesses cross-major upgrades, and uses the saved version-check timestamp. Fetch versions first. Development-channel OS selection is not supported; firmware selection still works. Actual targets are resolved on the router during upgrade.
+- Backup History records successful local backups created from this release onward, file paths, SHA-256 hashes and download verification. It can open the folder or recheck both hashes. It reports files removed by retention or moved to another PC; the archive does not contain backup files.
+- Upgrade preview offers a test-router approval after the first successful router in each group. Failure of that test router stops the queue. Choose No to pause, then use Resume Incomplete Queue. This approval is interactive only; scheduled jobs have no approval dialogs.
+- Optional maintenance cutoff applies to manual and scheduled runs. No new router starts at or after the cutoff. The current router and its retries finish. Review and resume unprocessed routers explicitly.
+- Critical interface names are comma-separated per router. They must exist and be running before upgrade; after upgrade the app waits up to the configured recovery time and fails verification if they do not recover. No PPPoE-specific assumptions are made.
+- Interactive completion shows Upgraded, Already current, Failed and Skipped/not-started rows. Existing Retry Failed, Resume Incomplete and saved reports remain available.
+- Inventory > Export Configuration creates a password-encrypted `.mtmconfig` archive containing routers, credentials, groups, schedule definitions and settings. Encryption uses AES-256-GCM and PBKDF2-SHA256 (600,000 iterations); keep the password separately. Import validates and replaces configuration, saves a local encrypted pre-import snapshot, and closes the app to reload settings. Imported schedules receive new IDs and remain disabled. Select one in Schedules, choose a future Run at time and optional cutoff, then Activate Imported Schedule. Local backup files and Windows task registrations are not transferred.
+- The open desktop app runs due scheduled jobs when idle and displays their Maintenance Progress. The Task Scheduler launcher waits for that result; if the desktop closes before the job starts, it takes over. Only one process owns maintenance and configuration writes. A job interrupted by an app crash requires review/resume and is never automatically replayed. If a headless job is already running, opening another GUI is still blocked. The waiting launcher times out after 24 hours with a failure exit code.
+- The EXE remains unsigned. Windows compilation and isolated regression checks do not replace a live-router maintenance trial.
+
 ## 0.2.5 faster version checks and release visibility
 
 - Fetch Current Versions queries up to eight routers concurrently, updates rows as results arrive, and preserves completed results when cancelled.
@@ -53,7 +67,7 @@ Use a test router before production deployment. Router upgrades, reboots and sen
 - Progress shows elapsed time, numbered reconnect attempts, a stability countdown and an Already current outcome. Percentages are stage estimates, not measured download progress.
 - **Help > Check for Updates:** download the official GitHub EXE and its SHA-256 checksum, verify, then confirm install/restart. Startup checks use the same flow when enabled. Updates preserve the executable path, settings and scheduled-task paths; the previous EXE is retained as `.previous`.
 - The updater needs write access to the EXE folder and does not silently elevate. If access is denied, replace the EXE manually or run from an appropriate writable folder. Downloaded updates remain unsigned; a checksum is not a malware scan or digital signature.
-- Only one app/scheduled-job process can run at a time to avoid update/maintenance collisions. Close the desktop app before unattended scheduled jobs; a conflicting scheduled launch exits with code 2. Update and close actions are blocked during maintenance. Cancellation cannot undo a command already sent to a router.
+- Only one process owns maintenance at a time. From 0.3.0 the desktop executes due schedules while open; the scheduled launcher waits for its result. Update and close actions are blocked during maintenance. Cancellation cannot undo a command already sent to a router.
 - PPPoE-specific checks are intentionally excluded. This release retains general RouterOS/API checks for routers and switches.
 
 Install 0.2.4 manually once to gain the self-updater for later releases. No change to the installed application is made until you confirm restart.
