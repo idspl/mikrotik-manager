@@ -6,6 +6,26 @@ internal static class Program
     private static void Main(string[] args)
     {
         ApplicationConfiguration.Initialize();
+        if (args.Length == 1 && args[0] == "--self-test")
+        {
+            try { RegressionTests.RunAsync().GetAwaiter().GetResult(); }
+            catch (Exception ex) { File.WriteAllText("self-test-failure.log", ex.ToString()); Environment.ExitCode = 1; }
+            return;
+        }
+        if (args.Length == 5 && args[0] == "--apply-update") { SelfUpdater.Apply(args); return; }
+        using var instance = new Mutex(false, SelfUpdater.InstanceName);
+        bool owned;
+        try { owned = instance.WaitOne(0); } catch (AbandonedMutexException) { owned = true; }
+        if (!owned)
+        {
+            if (args.Contains("--run-job"))
+            {
+                // Task Scheduler records a failure instead of silently reporting success.
+                Environment.ExitCode = 2;
+            }
+            else MessageBox.Show("MikroTik Manager or a scheduled job is already running. Close it before starting another instance.");
+            return;
+        }
         try
         {
             if (args.Length == 2 && args[0].Equals("--run-job", StringComparison.OrdinalIgnoreCase) && Guid.TryParse(args[1], out Guid jobId))
@@ -31,6 +51,7 @@ internal static class Program
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Error);
         }
+        finally { instance.ReleaseMutex(); }
     }
 
     private static async Task RunScheduledJobAsync(Guid jobId)
