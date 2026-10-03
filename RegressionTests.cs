@@ -9,6 +9,16 @@ internal static class RegressionTests
         string directory = Path.Combine(Path.GetTempPath(), "MikroTikManager-tests-" + Guid.NewGuid().ToString("N"));
         var store = new SecureStore(directory);
         static void Check(bool value, string message) { if (!value) throw new Exception(message); }
+        Guid done = Guid.NewGuid(), failedRouter = Guid.NewGuid(), pendingA = Guid.NewGuid(), pendingB = Guid.NewGuid(), interrupted = Guid.NewGuid();
+        MaintenanceProgressRow[] queueRows = [
+            new() { RouterId = pendingB }, new() { RouterId = done, Result = "Completed" },
+            new() { RouterId = failedRouter, Result = "Failed", Attempt = 1 },
+            new() { RouterId = interrupted, Result = "Interrupted", Stage = "Firmware upgrade", Attempt = 1 },
+            new() { RouterId = pendingA }];
+        Check(MainForm.PendingAfterFailures([done, failedRouter, pendingA, interrupted, pendingB], queueRows)
+            .SequenceEqual(new[] { pendingA, pendingB }), "Skip failures continues only unstarted routers in original queue order");
+        Check(MainForm.PendingAfterFailures([done, failedRouter], queueRows).Count == 0, "No remaining routers means no continuation");
+        Check(MainForm.PendingAfterFailures([pendingA], [new() { RouterId = pendingA }]).Count == 0, "Skip-failed action requires an actual failure");
         // Match the website's Livewire array wrappers and exclude archived releases.
         const string releaseState = """
             {"memo":{"name":"components.software.router-OS"},"data":{
