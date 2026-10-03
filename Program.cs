@@ -61,7 +61,8 @@ internal static class Program
         List<UpgradeJob> jobs = store.LoadJobs();
         UpgradeJob? job = jobs.FirstOrDefault(x => x.Id == jobId);
         if (job is null || job.State != "Scheduled") { Environment.ExitCode = job?.State == "Completed" ? 0 : 2; return; }
-        if (job.ScheduledLocalTime > DateTime.Now) { Environment.ExitCode = 2; return; }
+        if (job.ScheduledLocalTime > DateTime.Now)
+        { Environment.ExitCode = job.Kind == ScheduledJobKind.Backup && job.CompletedAt is not null && job.LastRunSuccessful ? 0 : 2; return; }
         job.State = "Running";
         job.StartedAt = DateTime.Now;
         store.SaveJobs(jobs);
@@ -70,6 +71,14 @@ internal static class Program
         try
         {
             if (selected.Count == 0 || selected.Count != job.RouterIds.Count) throw new InvalidOperationException("Scheduled routers are missing or empty.");
+            if (job.Kind == ScheduledJobKind.Backup)
+            {
+                var backup = await ScheduledBackupRunner.RunAsync(store, store.LoadSettings(), job, selected, null, null, CancellationToken.None);
+                job.State = backup.Failed == 0 ? "Completed" : $"Backup failed: {backup.Failed} routers";
+                job.LastRunResult = $"Backup: {backup.Successful} successful, {backup.Failed} failed; {backup.Folder}";
+            }
+            else
+            {
             var engine = new UpgradeEngine(store, store.LoadSettings());
             MaintenanceRunResult result = await engine.RunSequentialAsync(selected,
                 new UpgradeRunOptions(job.FailureBehavior, job.RetryCount, job.WindowEnd), CancellationToken.None);
@@ -77,6 +86,7 @@ internal static class Program
             job.State = result.Failed == 0 && result.Routers.Count == selected.Count
                 ? "Completed"
                 : $"Completed with {result.Failed} failed and {selected.Count - result.Routers.Count} not processed";
+            }
         }
         catch (Exception ex)
         {
@@ -84,10 +94,12 @@ internal static class Program
         }
         finally
         {
-            job.CompletedAt = DateTime.Now;
+            bool success = job.State == "Completed";
+            string result = job.State == "Completed" && job.Kind == ScheduledJobKind.Backup ? job.LastRunResult : job.State;
+            BackupSchedulePolicy.Finish(job, success, result, DateTime.Now);
             store.SaveRouters(routers);
             store.SaveJobs(jobs);
-            Environment.ExitCode = job.State == "Completed" ? 0 : 2;
+            Environment.ExitCode = success ? 0 : 2;
         }
     }
 }

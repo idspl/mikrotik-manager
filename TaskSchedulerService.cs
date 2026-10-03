@@ -6,6 +6,8 @@ public static class TaskSchedulerService
 {
     public static async Task RegisterAsync(UpgradeJob job, CancellationToken ct = default)
     {
+        BackupSchedulePolicy.Validate(job);
+        job.ScheduledLocalTime = BackupSchedulePolicy.Minute(job.ScheduledLocalTime);
         if (job.ScheduledLocalTime <= DateTime.Now.AddMinutes(1))
             throw new ArgumentException("The schedule must be at least one minute in the future.");
 
@@ -20,11 +22,16 @@ public static class TaskSchedulerService
         };
         foreach (string argument in new[]
         {
-            "/Create", "/TN", taskName, "/TR", action, "/SC", "ONCE",
+            "/Create", "/TN", taskName, "/TR", action, "/SC", job.Recurrence switch { BackupRecurrence.Daily => "DAILY", BackupRecurrence.Weekly => "WEEKLY", _ => "ONCE" },
             "/SD", job.ScheduledLocalTime.ToString("MM/dd/yyyy"),
             "/ST", job.ScheduledLocalTime.ToString("HH:mm"),
             "/RU", "SYSTEM", "/RL", "HIGHEST", "/F"
         }) start.ArgumentList.Add(argument);
+        if (job.Recurrence == BackupRecurrence.Weekly)
+        {
+            start.ArgumentList.Add("/D");
+            start.ArgumentList.Add(job.ScheduledLocalTime.DayOfWeek.ToString()[..3].ToUpperInvariant());
+        }
         using Process process = Process.Start(start) ?? throw new InvalidOperationException("Could not start Windows Task Scheduler.");
         await process.WaitForExitAsync(ct);
         if (process.ExitCode != 0) throw new InvalidOperationException($"Task Scheduler returned exit code {process.ExitCode}.");

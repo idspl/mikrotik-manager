@@ -13,7 +13,7 @@ internal static class SelfUpdater
     public static async Task<string> DownloadAsync(string expectedVersion, CancellationToken ct)
     {
         using var client = new HttpClient { Timeout = TimeSpan.FromMinutes(10) };
-        client.DefaultRequestHeaders.UserAgent.ParseAdd("MikroTikManager-Updater/0.3.0");
+        client.DefaultRequestHeaders.UserAgent.ParseAdd("MikroTikManager-Updater/0.4.0");
         string json = await client.GetStringAsync("https://api.github.com/repos/idspl/mikrotik-manager/releases/latest", ct);
         using var doc = JsonDocument.Parse(json);
         var root = doc.RootElement;
@@ -111,3 +111,4 @@ internal static class SelfUpdater
         }
     }
 }
+

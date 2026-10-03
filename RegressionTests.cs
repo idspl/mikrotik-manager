@@ -9,6 +9,32 @@ internal static class RegressionTests
         string directory = Path.Combine(Path.GetTempPath(), "MikroTikManager-tests-" + Guid.NewGuid().ToString("N"));
         var store = new SecureStore(directory);
         static void Check(bool value, string message) { if (!value) throw new Exception(message); }
+        // Construct every tab on the STA entry thread without showing the form or contacting routers.
+        using (var form = new MainForm()) { form.CreateControl(); Check(form.Text.Contains("0.4.0"), "Dashboard and menus construct on Windows"); }
+        var settings = new AppSettings { UpdateChannel = "long-term" };
+        var channelRouter = new RouterRecord();
+        Check(RouterChannels.Resolve(channelRouter, settings) == "long-term", "Default channel inherits settings");
+        channelRouter.UpdateChannel = "testing";
+        Check(RouterChannels.Resolve(channelRouter, settings) == "testing", "Router channel overrides settings");
+        bool invalidChannel = false;
+        try { RouterChannels.Resolve(new RouterRecord { UpdateChannel = "invalid" }, settings); } catch (InvalidOperationException) { invalidChannel = true; }
+        Check(invalidChannel, "Unknown channel rejected");
+        var due = new DateTime(2026, 10, 3, 2, 30, 0);
+        var daily = new UpgradeJob { Kind = ScheduledJobKind.Backup, Recurrence = BackupRecurrence.Daily, ScheduledLocalTime = due, BackupFolder = directory };
+        BackupSchedulePolicy.Validate(daily);
+        BackupSchedulePolicy.Finish(daily, false, "One router failed", due.AddDays(3).AddHours(1));
+        Check(daily.State == "Scheduled" && daily.ScheduledLocalTime == due.AddDays(4) && !daily.LastRunSuccessful && daily.LastRunResult == "One router failed", "Daily failure advances past missed runs and retains outcome");
+        var weekly = new UpgradeJob { Kind = ScheduledJobKind.Backup, Recurrence = BackupRecurrence.Weekly, ScheduledLocalTime = due, BackupFolder = directory };
+        BackupSchedulePolicy.Finish(weekly, true, "Done", due.AddDays(16));
+        Check(weekly.ScheduledLocalTime == due.AddDays(21), "Weekly catchup preserves weekday and local time");
+        var once = new UpgradeJob { Kind = ScheduledJobKind.Backup, ScheduledLocalTime = due };
+        BackupSchedulePolicy.Finish(once, true, "Done", due.AddMinutes(2));
+        Check(once.State == "Completed" && once.ScheduledLocalTime == due, "One-time backup never repeats");
+        Check(BackupSchedulePolicy.JobFolder(daily) != BackupSchedulePolicy.JobFolder(weekly), "Retention directories isolated per schedule");
+        bool recurringUpgrade = false;
+        try { BackupSchedulePolicy.Validate(new UpgradeJob { Recurrence = BackupRecurrence.Daily }); } catch (ArgumentException) { recurringUpgrade = true; }
+        Check(recurringUpgrade, "Upgrade schedules cannot repeat implicitly");
+        Check(BackupSchedulePolicy.Minute(due.AddSeconds(57)) == due, "Scheduler time matches Windows minute precision");
         Guid done = Guid.NewGuid(), failedRouter = Guid.NewGuid(), pendingA = Guid.NewGuid(), pendingB = Guid.NewGuid(), interrupted = Guid.NewGuid();
         MaintenanceProgressRow[] queueRows = [
             new() { RouterId = pendingB }, new() { RouterId = done, Result = "Completed" },
@@ -49,6 +75,18 @@ internal static class RegressionTests
         bool tamperRejected = false;
         try { ConfigurationArchive.Decrypt(archive, "test-export-password"); } catch (System.Security.Cryptography.CryptographicException) { tamperRejected = true; }
         Check(tamperRejected, "Reject modified archive");
+        router.UpdateChannel = "long-term";
+        daily.RouterIds = [router.Id];
+        var v2 = new ConfigurationBundle(2, [router], [daily], new AppSettings());
+        var restored = ConfigurationArchive.Decrypt(ConfigurationArchive.Encrypt(v2, "test-export-password"), "test-export-password");
+        Check(restored.Version == 2 && restored.Routers[0].UpdateChannel == "long-term" && restored.Jobs[0].Kind == ScheduledJobKind.Backup && restored.Jobs[0].Recurrence == BackupRecurrence.Daily, "Version 2 archive preserves backup and channel settings");
+        daily.Recurrence = (BackupRecurrence)99;
+        bool badRecurrence = false;
+        try { ConfigurationArchive.Decrypt(ConfigurationArchive.Encrypt(v2, "test-export-password"), "test-export-password"); } catch (InvalidDataException) { badRecurrence = true; }
+        Check(badRecurrence, "Unknown recurrence rejected on import");
+        daily.Recurrence = BackupRecurrence.Daily;
+        var legacy = System.Text.Json.JsonSerializer.Deserialize<UpgradeJob>("{\"Name\":\"Old upgrade\"}")!;
+        Check(legacy.Kind == ScheduledJobKind.Upgrade && legacy.Recurrence == BackupRecurrence.Once, "Legacy schedules remain one-time upgrades");
         store.ImportConfiguration(bundle);
         Check(store.LoadRouters()[0].Id == router.Id && !File.Exists(Path.Combine(directory, "import-pending.dat")), "Import transaction completed");
         Check(ReleaseVersion.IsNewerSameMajor("7.24.5", "7.24.4 (stable)"), "Version comparison accepts RouterOS suffix");
@@ -74,6 +112,12 @@ internal static class RegressionTests
                 return ScheduledJobCoordinator.Wait(contender, store, scheduled.Id, TimeSpan.FromSeconds(1));
             }).GetAwaiter().GetResult();
             Check(completedByDesktop == ScheduledOwnership.CompletedByDesktop, "Launcher sees desktop completion without replay");
+            daily.ScheduledLocalTime = DateTime.Now.AddDays(1); daily.LastRunSuccessful = true; store.SaveJobs([daily]);
+            var recurringDone = Task.Run(() => {
+                using var contender = new Mutex(false, mutexName);
+                return ScheduledJobCoordinator.Wait(contender, store, daily.Id, TimeSpan.FromSeconds(1));
+            }).GetAwaiter().GetResult();
+            Check(recurringDone == ScheduledOwnership.CompletedByDesktop, "Recurring desktop completion does not replay backup");
             scheduled.State = "Scheduled"; store.SaveJobs([scheduled]); owner.ReleaseMutex();
             var takeover = Task.Run(() =>
             {

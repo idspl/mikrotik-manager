@@ -32,18 +32,19 @@ public sealed partial class MainForm
         try
         {
             var releases = await RouterOsReleases.FetchAsync();
-            string channel = _store.LoadSettings().UpdateChannel;
-            string target = channel switch { "stable" => releases.Stable, "long-term" => releases.LongTerm, "testing" => releases.Testing, _ => "" };
+            var settings = _store.LoadSettings();
             _routerGrid.ClearSelection();
             int count = 0;
             foreach (DataGridViewRow row in _routerGrid.Rows)
             {
                 if (row.DataBoundItem is not RouterRecord router || router.ApiStatus != "Online" || router.LastCheckedAt is null) continue;
+                string channel = RouterChannels.Resolve(router, settings);
+                string target = channel switch { "stable" => releases.Stable, "long-term" => releases.LongTerm, "testing" => releases.Testing, _ => "" };
                 bool os = ReleaseVersion.IsNewerSameMajor(target, router.RouterOsVersion);
                 bool firmware = ReleaseVersion.IsNewerSameMajor(router.AvailableFirmware, router.FirmwareVersion);
                 if (os || firmware) { row.Selected = true; count++; }
             }
-            MessageBox.Show($"Selected {count} visible router(s) with a newer published {channel} version in the same major branch or newer available firmware.\n\nFetch Current Versions first for current inventory. Offline, unknown and cross-major upgrades are not selected automatically. The router resolves its applicable target during upgrade.");
+            MessageBox.Show($"Selected {count} visible router(s) with a newer published version for their configured channel in the same major branch or newer available firmware.\n\nFetch Current Versions first for current inventory. Offline, unknown and cross-major upgrades are not selected automatically. The router resolves its applicable target during upgrade.");
         }
         catch (Exception ex) { ShowError(ex); }
         finally { SetBusy(false, "Ready"); }
@@ -103,7 +104,7 @@ public sealed partial class MainForm
         SetBusy(true, "Encrypting configuration...");
         try
         {
-            var bundle = new ConfigurationBundle(1, _routers.ToList(), _jobs.ToList(), _store.LoadSettings());
+            var bundle = new ConfigurationBundle(2, _routers.ToList(), _jobs.ToList(), _store.LoadSettings());
             byte[] encrypted = await Task.Run(() => ConfigurationArchive.Encrypt(bundle, password));
             await File.WriteAllBytesAsync(dialog.FileName, encrypted);
             MessageBox.Show("Encrypted configuration exported. Keep its password separately. Local backup files are not included.");
