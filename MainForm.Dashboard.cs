@@ -4,7 +4,7 @@ public sealed partial class MainForm
 {
     private TabPage _dashboardPage = null!, _routerPage = null!, _schedulesPage = null!;
     private readonly Dictionary<string, Label> _dashboardCounts = [];
-    private readonly Label _dashboardNote = new() { AutoSize = true, ForeColor = Color.DimGray, Margin = new Padding(8, 10, 8, 16) };
+    private readonly Label _dashboardNote = new() { AutoSize = true, MaximumSize = new Size(1030, 0), ForeColor = Color.DimGray, Margin = new Padding(8, 10, 8, 16) };
     private readonly ListView _dashboardJobs = new() { View = View.Details, FullRowSelect = true, Height = 210, Width = 1060 };
     private readonly ListView _dashboardGroups = new() { View = View.Details, FullRowSelect = true, Height = 185, Width = 1060 };
 
@@ -38,10 +38,11 @@ public sealed partial class MainForm
         _dashboardGroups.Columns.Add("Group", 330); _dashboardGroups.Columns.Add("Routers", 120);
         _dashboardGroups.Columns.Add("API online", 140); _dashboardGroups.Columns.Add("Backup >7d / never", 210);
         layout.Controls.Add(_dashboardGroups);
-        layout.Controls.Add(new Label { Text = "Made for MikroTik • Independent software by Indigo Data Services. MikroTik trademarks belong to MikroTik SIA.", AutoSize = true, ForeColor = Color.DimGray, Margin = new Padding(3, 16, 3, 16) });
+        layout.Controls.Add(new Label { Text = "Made for MikroTik • Independent software by Indigo Data Services. MikroTik trademarks belong to MikroTikls SIA.", AutoSize = true, ForeColor = Color.DimGray, Margin = new Padding(3, 16, 3, 16) });
         page.Controls.Add(layout);
         page.Resize += (_, _) => {
             int width = Math.Max(600, page.ClientSize.Width - 65);
+            _dashboardNote.MaximumSize = new Size(width - 16, 0);
             cards.MaximumSize = new Size(width, 0); cards.Width = width;
             _dashboardJobs.Width = width; _dashboardGroups.Width = width;
         };
