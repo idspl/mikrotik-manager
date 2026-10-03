@@ -6,6 +6,7 @@ internal static class BackupSchedulePolicy
 
     internal static void Validate(UpgradeJob job)
     {
+        if (job.MaxConcurrency is < 0 or > 10000 || job.FailureLimit is < 0 or > 10000) throw new ArgumentException("Invalid batch limits.");
         if (!Enum.IsDefined(job.Kind) || !Enum.IsDefined(job.Recurrence)) throw new ArgumentException("Unknown schedule type.");
         if (job.Kind == ScheduledJobKind.Upgrade && job.Recurrence != BackupRecurrence.Once)
             throw new ArgumentException("Recurring schedules are available for backups only.");

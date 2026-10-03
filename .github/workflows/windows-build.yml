@@ -30,6 +30,10 @@ jobs:
             if (Test-Path self-test-failure.log) { Get-Content self-test-failure.log }
             throw "Regression tests failed: $($test.ExitCode)"
           }
+      - name: Capture workspace previews
+        shell: pwsh
+        run: |
+          Get-ChildItem ui-*.base64 | ForEach-Object { Write-Output "UI_PREVIEW:$($_.Name):$(Get-Content $_ -Raw)" }
       - uses: actions/upload-artifact@v4
         with:
           name: MikroTikManager-win-x64

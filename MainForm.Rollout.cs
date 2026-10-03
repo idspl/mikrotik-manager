@@ -79,7 +79,7 @@ public sealed partial class MainForm
             {
             var engine = CreateEngine(); _activeUpgrade = engine;
             var result = await Task.Run(() => engine.RunSequentialAsync(selected,
-                new UpgradeRunOptions(job.FailureBehavior, job.RetryCount, manualRun ? null : job.WindowEnd), _running.Token));
+                new UpgradeRunOptions(job.FailureBehavior, job.RetryCount, manualRun ? null : job.WindowEnd, MaxConcurrency: job.MaxConcurrency, FailureLimit: job.FailureLimit), _running.Token));
             await new MaintenanceReportService(_store).WriteAsync(result);
             job.State = result.Failed == 0 && result.Routers.Count == selected.Count ? "Completed"
                 : $"Finished: {result.Failed} failed; {selected.Count - result.Routers.Count} not processed";
@@ -89,12 +89,13 @@ public sealed partial class MainForm
         catch (Exception ex) { job.State = "Failed: " + ex.Message; }
         finally
         {
+            FlushUiUpdates();
             bool success = job.State == "Completed";
             string result = success && job.Kind == ScheduledJobKind.Backup ? job.LastRunResult : job.State;
             BackupSchedulePolicy.Finish(job, success, result, DateTime.Now, manualRun ? previousState : null); _activeUpgrade = null;
             try { SaveAll(); } catch (Exception ex) { ShowError(ex); }
             _running.Dispose(); _running = null; SetBusy(false, job.Name + ": " + job.LastRunResult);
-            _jobGrid.Refresh(); _routerGrid.Refresh();
+            _jobGrid.Refresh(); RequestInventoryPaint();
         }
     }
 
@@ -103,6 +104,15 @@ public sealed partial class MainForm
         if (_operationInProgress || _jobGrid.CurrentRow?.DataBoundItem is not UpgradeJob job) return;
         if (job.Kind == ScheduledJobKind.Backup) { await ConfigureBackupScheduleAsync(job); return; }
         if (job.State != "Imported — disabled") { MessageBox.Show("Select an imported disabled schedule. Set its Run at date above before activating."); return; }
+        using (var activation = new Form { Text = "Activate Upgrade Schedule", Width = 430, Height = 240, StartPosition = FormStartPosition.CenterParent })
+        {
+            var panel = new FlowLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(16), FlowDirection = FlowDirection.TopDown };
+            var date = new DateTimePicker { Format = DateTimePickerFormat.Custom, CustomFormat = "dd MMM yyyy HH:mm", Width = 240, Value = DateTime.Now.AddHours(1) };
+            panel.Controls.Add(new Label { Text = "Choose a new start time. No cutoff is applied.", AutoSize = true }); panel.Controls.Add(date);
+            panel.Controls.Add(new Button { Text = "Continue", DialogResult = DialogResult.OK, AutoSize = true }); activation.Controls.Add(panel);
+            if (activation.ShowDialog(this) != DialogResult.OK) return;
+            _scheduleTime.Value = date.Value; _scheduleWindow.Checked = false;
+        }
         if (_scheduleTime.Value <= DateTime.Now.AddMinutes(1)) { MessageBox.Show("Choose a future Run at time."); return; }
         if (_scheduleWindow.Checked && _scheduleEnd.Value <= _scheduleTime.Value) { MessageBox.Show("Cutoff must be after Run at."); return; }
         if (MessageBox.Show($"Activate '{job.Name}' for {_scheduleTime.Value:g}, containing {job.RouterCount} routers?", Text, MessageBoxButtons.YesNo) != DialogResult.Yes) return;

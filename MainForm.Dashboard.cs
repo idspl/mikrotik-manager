@@ -88,10 +88,19 @@ public sealed partial class MainForm
         grid.EnableHeadersVisualStyles = false; grid.ColumnHeadersHeight = 36;
         grid.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(28, 49, 78);
         grid.ColumnHeadersDefaultCellStyle.ForeColor = Color.White;
+        grid.ColumnHeadersDefaultCellStyle.SelectionBackColor = grid.ColumnHeadersDefaultCellStyle.BackColor;
+        grid.ColumnHeadersDefaultCellStyle.SelectionForeColor = Color.White;
         grid.ColumnHeadersDefaultCellStyle.Font = new Font("Segoe UI", 9, FontStyle.Bold);
         grid.AlternatingRowsDefaultCellStyle.BackColor = Color.FromArgb(247, 249, 252);
         grid.DefaultCellStyle.SelectionBackColor = Color.FromArgb(218, 233, 250);
         grid.DefaultCellStyle.SelectionForeColor = Color.FromArgb(20, 40, 65);
+        grid.CellFormatting += (_, e) => {
+            if (e.ColumnIndex < 0 || grid.Columns[e.ColumnIndex].DataPropertyName is not ("ApiStatus" or "Result" or "State")) return;
+            string state = e.Value?.ToString() ?? "";
+            if (state is "Online" or "Completed") { e.CellStyle.ForeColor = Color.FromArgb(24, 112, 73); e.CellStyle.BackColor = Color.FromArgb(231, 247, 238); }
+            else if (state.Contains("Failed", StringComparison.OrdinalIgnoreCase)) { e.CellStyle.ForeColor = Color.FromArgb(160, 36, 36); e.CellStyle.BackColor = Color.FromArgb(255, 235, 235); }
+            else if (state is "Running" or "Retrying") { e.CellStyle.ForeColor = Color.FromArgb(32, 83, 148); e.CellStyle.BackColor = Color.FromArgb(229, 239, 255); }
+        };
         foreach (DataGridViewColumn column in grid.Columns)
             if (column.DataPropertyName.EndsWith("At") || column.DataPropertyName == nameof(UpgradeJob.ScheduledLocalTime)) column.DefaultCellStyle.Format = "dd MMM yyyy HH:mm";
     }

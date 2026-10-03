@@ -13,6 +13,8 @@ public sealed partial class MainForm
         var router = selected[0];
         using var dialog = new ManualRouterDialog(router.ApiPort, router);
         if (dialog.ShowDialog(this) != DialogResult.OK || dialog.Router is not { } edited) return;
+        edited.Site = router.Site; edited.Tags = router.Tags; edited.LastSeenAt = router.LastSeenAt;
+        edited.LastBackupAttemptAt = router.LastBackupAttemptAt; edited.LastBackupError = router.LastBackupError;
         edited.Id = router.Id; edited.BackupPassword = router.BackupPassword; edited.Backups = router.Backups;
         if (edited.Host == router.Host && edited.ApiPort == router.ApiPort)
         {
@@ -59,7 +61,7 @@ public sealed partial class MainForm
         var grid = new DataGridView { Dock = DockStyle.Fill, ReadOnly = true, AllowUserToAddRows = false, SelectionMode = DataGridViewSelectionMode.FullRowSelect, MultiSelect = false,
             AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.DisplayedCells,
             DataSource = entries.Select(x => new { x.Router, x.Backup.CreatedAt, x.Backup.Verification,
-                Files = File.Exists(x.Backup.BackupPath) && File.Exists(x.Backup.ExportPath) ? "Present" : "Missing / moved / retention removed",
+                Files = "Use Verify Selected Files to check",
                 x.Backup.BackupPath, x.Backup.ExportPath, x.Backup.BackupHash, x.Backup.ExportHash }).ToList() };
         var bar = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = 45 };
         var open = Button("Open Folder", (_, _) =>
@@ -104,7 +106,7 @@ public sealed partial class MainForm
         SetBusy(true, "Encrypting configuration...");
         try
         {
-            var bundle = new ConfigurationBundle(2, _routers.ToList(), _jobs.ToList(), _store.LoadSettings());
+            var bundle = new ConfigurationBundle(3, _routers.ToList(), _jobs.ToList(), _store.LoadSettings());
             byte[] encrypted = await Task.Run(() => ConfigurationArchive.Encrypt(bundle, password));
             await File.WriteAllBytesAsync(dialog.FileName, encrypted);
             MessageBox.Show("Encrypted configuration exported. Keep its password separately. Local backup files are not included.");

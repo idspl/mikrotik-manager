@@ -2,6 +2,22 @@ namespace MikroTikManager;
 
 public sealed partial class MainForm
 {
+    private void ShowUpgradeScheduleDialog(object? sender, EventArgs e)
+    {
+        if (_operationInProgress || _updateInProgress) return;
+        if (SelectedRouters().Count == 0) { MessageBox.Show("Select devices in Devices first."); return; }
+        using var dialog = new Form { Text = "Create Upgrade Schedule", Width = 530, Height = 380, StartPosition = FormStartPosition.CenterParent };
+        var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, Padding = new Padding(18) };
+        AddRow(layout, "Name", _jobName); AddRow(layout, "Run at", _scheduleTime);
+        AddRow(layout, "Concurrent (0 = all)", _scheduleConcurrency);
+        AddRow(layout, "", _scheduleWindow); AddRow(layout, "Cutoff", _scheduleEnd);
+        AddRow(layout, "", new Label { Text = "Parallel upgrades require independent devices. Failure policy and retries use the Devices screen settings.", AutoSize = true, MaximumSize = new Size(280, 70) });
+        AddRow(layout, "", new Button { Text = "Create Schedule", AutoSize = true, DialogResult = DialogResult.OK }); dialog.Controls.Add(layout);
+        var result = dialog.ShowDialog(this);
+        // These fields belong to MainForm and must outlive the temporary dialog.
+        foreach (Control control in new Control[] { _jobName, _scheduleTime, _scheduleConcurrency, _scheduleWindow, _scheduleEnd }) layout.Controls.Remove(control);
+        if (result == DialogResult.OK) CreateSchedule(sender, e);
+    }
     private void BuildScheduleContextMenu()
     {
         var menu = new ContextMenuStrip(_components);
@@ -38,7 +54,7 @@ public sealed partial class MainForm
         if (job.Kind == ScheduledJobKind.Upgrade) effect += "\nThe saved cutoff is ignored for this manual run. Routers may reboot and interrupt service.";
         string names = string.Join("\n", routers.Take(12).Select(r => "• " + r.Name + " (" + r.Host + ")"));
         if (routers.Count > 12) names += $"\n…and {routers.Count - 12} more";
-        if (MessageBox.Show(this, $"Run '{job.Name}' now?\nType: {job.Kind} | Routers: {routers.Count}\n\n{names}\n\n{effect}", "Run Job Now", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
+        if (MessageBox.Show(this, $"Run '{job.Name}' now?\nType: {job.Kind} | Routers: {routers.Count} | Concurrent: {(job.MaxConcurrency == 0 ? "All" : job.MaxConcurrency.ToString())}\n\n{names}\n\n{effect}", "Run Job Now", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
         await RunScheduledInUiAsync(job, manualRun: true);
         RefreshDashboard();
     }

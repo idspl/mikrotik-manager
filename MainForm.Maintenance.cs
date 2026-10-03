@@ -89,7 +89,7 @@ public sealed partial class MainForm
         if (form.ShowDialog(this) != DialogResult.OK) return;
         string oldUsername = router.Username, oldPassword = router.Password;
         router.Username = username.Text.Trim(); router.Password = CandidatePassword();
-        try { SaveRouters(); router.ApiStatus = "Not checked"; router.LastStatus = "Credentials updated"; _routerGrid.Refresh(); }
+        try { SaveRouters(); router.ApiStatus = "Not checked"; router.LastStatus = "Credentials updated"; RequestInventoryPaint(); }
         catch (Exception ex) { router.Username = oldUsername; router.Password = oldPassword; ShowError(ex); }
         await Task.CompletedTask;
     }
@@ -138,12 +138,17 @@ public sealed partial class MainForm
             foreach (string column in new[] { "Order", "Router", "Group", "Address", "Channel", "RouterOS", "Firmware", "Available firmware", "Ready", "Storage", "Detail" })
                 rows.Columns.Add(column);
             var engine = new UpgradeEngine(_store, _store.LoadSettings());
+            using var slots = new SemaphoreSlim(8);
+            var checkedRouters = await Task.WhenAll(selected.Select(async router => {
+                await slots.WaitAsync(_running.Token);
+                try { return await engine.PreflightAsync(router, _running.Token); }
+                finally { slots.Release(); }
+            }));
             int order = 0;
-            foreach (RouterRecord router in selected)
+            foreach (var health in checkedRouters)
             {
-                RouterHealthCheck health = await engine.PreflightAsync(router, _running.Token);
-                rows.Rows.Add(++order, router.Name, router.Group, router.Host,
-                    RouterChannels.Resolve(router, _store.LoadSettings()),
+                var router = health.Router;
+                rows.Rows.Add(++order, router.Name, router.Group, router.Host, RouterChannels.Resolve(router, _store.LoadSettings()),
                     health.Snapshot?.RouterOsVersion ?? "Unknown", health.Snapshot?.CurrentFirmware ?? "Unknown",
                     health.Snapshot?.UpgradeFirmware ?? "Not applicable", health.Passed, router.StorageStatus, health.Summary);
             }
@@ -152,7 +157,7 @@ public sealed partial class MainForm
                 $"Channels: see each router row | Failure policy: {FriendlyBehavior(behavior)} | Retries: {retries}\n" +
                 "RouterOS target is resolved by the router at execution time; it is not pinned by this preview.\n" +
                 "Safety backups are created ON EACH ROUTER (preupgrade-*). Use Backup Selected first for local copies.\n" +
-                "Routers run in the order shown, not automatically sorted by group. Failed readiness checks block that router at execution." };
+                "Parallel mode is for independent devices; keep upstream routers/switches in a separate job. Test mode processes one group at a time. Failed readiness checks block that router at execution." };
             var grid = new DataGridView { Dock = DockStyle.Fill, ReadOnly = true, AllowUserToAddRows = false,
                 AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.DisplayedCells, DataSource = rows };
             var actions = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = 45, FlowDirection = FlowDirection.RightToLeft };
@@ -160,17 +165,23 @@ public sealed partial class MainForm
             var canary = new CheckBox { Text = "Test first router in each group; approve before continuing", AutoSize = true };
             var window = new CheckBox { Text = "Stop starting routers after", AutoSize = true };
             var end = new DateTimePicker { Format = DateTimePickerFormat.Custom, CustomFormat = "dd MMM yyyy HH:mm", Width = 175, Value = DateTime.Now.AddHours(2) };
-            controls.Controls.AddRange([canary, window, end]);
+            var concurrent = Numeric(_batchConcurrency, 0, 10000);
+            var failures = Numeric(_batchFailureLimit, 0, 10000);
+            controls.Height = 105;
+            controls.Controls.AddRange([new Label { Text = "Concurrent (0 = all)", AutoSize = true }, concurrent,
+                new Label { Text = "Stop after failures (0 = policy only)", AutoSize = true }, failures, canary, window, end]);
             actions.Controls.Add(new Button { Text = "Cancel", DialogResult = DialogResult.Cancel, AutoSize = true });
             actions.Controls.Add(new Button { Text = "Start Upgrade", DialogResult = DialogResult.OK, AutoSize = true });
             dialog.Controls.Add(grid); dialog.Controls.Add(info); dialog.Controls.Add(controls); dialog.Controls.Add(actions);
             if (dialog.ShowDialog(this) != DialogResult.OK) return false;
             if (window.Checked && end.Value <= DateTime.Now) { MessageBox.Show("The maintenance cutoff must be in the future."); return false; }
+            _batchConcurrency = (int)concurrent.Value; _batchFailureLimit = (int)failures.Value;
+            if (_batchConcurrency == 0 && MessageBox.Show(this, $"Start ALL {selected.Count} selected devices concurrently? Confirm they do not depend on one another for connectivity or power.", "All at once", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes) return false;
             _canaryPerGroup = canary.Checked; _upgradeWindowEnd = window.Checked ? end.Value : null;
             return true;
         }
         catch (OperationCanceledException) { return false; }
         catch (Exception ex) { ShowError(ex); return false; }
-        finally { _running.Dispose(); _running = null; SetBusy(false, "Ready"); _routerGrid.Refresh(); }
+        finally { _running.Dispose(); _running = null; SetBusy(false, "Ready"); RequestInventoryPaint(); }
     }
 }
