@@ -23,7 +23,7 @@ public sealed partial class MainForm
 
     private void ShowRunSummary(MaintenanceRunResult result, List<RouterRecord> selected)
     {
-        using var dialog = new Form { Text = "Maintenance Results", Width = 1000, Height = 520, StartPosition = FormStartPosition.CenterParent };
+        using var dialog = new DpiDialog { Text = "Maintenance Results", Width = 1000, Height = 520, StartPosition = FormStartPosition.CenterParent };
         var rows = new System.Data.DataTable();
         foreach (string column in new[] { "Router", "Outcome", "RouterOS", "Firmware", "Detail" }) rows.Columns.Add(column);
         foreach (var router in selected)
@@ -104,7 +104,7 @@ public sealed partial class MainForm
         if (_operationInProgress || _jobGrid.CurrentRow?.DataBoundItem is not UpgradeJob job) return;
         if (job.Kind == ScheduledJobKind.Backup) { await ConfigureBackupScheduleAsync(job); return; }
         if (job.State != "Imported — disabled") { MessageBox.Show("Select an imported disabled schedule. Set its Run at date above before activating."); return; }
-        using (var activation = new Form { Text = "Activate Upgrade Schedule", Width = 430, Height = 240, StartPosition = FormStartPosition.CenterParent })
+        using (var activation = new DpiDialog { Text = "Activate Upgrade Schedule", Width = 430, Height = 240, StartPosition = FormStartPosition.CenterParent })
         {
             var panel = new FlowLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(16), FlowDirection = FlowDirection.TopDown };
             var date = new DateTimePicker { Format = DateTimePickerFormat.Custom, CustomFormat = "dd MMM yyyy HH:mm", Width = 240, Value = DateTime.Now.AddHours(1) };

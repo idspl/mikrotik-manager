@@ -34,21 +34,25 @@ public sealed partial class MainForm : Form
 
     public MainForm(SecureStore? store = null, bool smokeTest = false)
     {
+        SuspendLayout();
+        AutoScaleDimensions = new SizeF(96F, 96F);
+        AutoScaleMode = AutoScaleMode.Dpi;
         _store = store ?? new SecureStore();
         _routerContextMenu = new ContextMenuStrip(_components);
-        Text = "MikroTik Manager 0.5.0";
+        Text = "MikroTik Manager 0.5.1";
         Font = new Font("Segoe UI", 9F);
         Icon = AppIcon.Current;
         Width = 1440;
         Height = 850;
         StartPosition = FormStartPosition.CenterScreen;
-        MinimumSize = new Size(900, 560);
+        MinimumSize = new Size(760, 480);
         AllowDrop = true;
         _routers = new SortableBindingList<RouterRecord>(_store.LoadRouters());
         foreach (var router in _routers) { router.ApiStatus = "Not checked"; router.LastStatus = "Saved information — awaiting live check"; }
         _jobs = new BindingList<UpgradeJob>(_store.LoadJobs());
         foreach (var job in _jobs.Where(x => x.State == "Running")) job.State = "Interrupted — review maintenance history";
         BuildUi();
+        ResumeLayout(true);
         DragEnter += MainFormDragEnter;
         DragDrop += MainFormDragDrop;
         FormClosing += (_, e) =>
@@ -64,6 +68,9 @@ public sealed partial class MainForm : Form
         };
         Shown += async (_, _) =>
         {
+            var area = Screen.FromControl(this).WorkingArea;
+            MinimumSize = new Size(Math.Min(MinimumSize.Width, area.Width), Math.Min(MinimumSize.Height, area.Height));
+            Size = new Size(Math.Min(Width, area.Width), Math.Min(Height, area.Height));
             if (smokeTest) return;
             _ = RefreshRouterOsReleasesAsync();
             _routerGrid.ClearSelection();
@@ -179,8 +186,8 @@ public sealed partial class MainForm : Form
         var updatesMenu = new ToolStripDropDownButton("Help") { Alignment = ToolStripItemAlignment.Right };
         updatesMenu.DropDownItems.Add("Check for Updates", null, async (_, _) => await CheckForUpdatesAsync(true));
         updatesMenu.DropDownItems.Add(new ToolStripSeparator());
-        updatesMenu.DropDownItems.Add("About MikroTik Manager 0.5.0", null, (_, _) =>
-            MessageBox.Show("MikroTik Manager 0.5.0\n\nMade for MikroTik\nIndependent open-source software by Indigo Data Services Pvt Ltd.", Text,
+        updatesMenu.DropDownItems.Add("About MikroTik Manager 0.5.1", null, (_, _) =>
+            MessageBox.Show("MikroTik Manager 0.5.1\n\nMade for MikroTik\nIndependent open-source software by Indigo Data Services Pvt Ltd.", Text,
                 MessageBoxButtons.OK, MessageBoxIcon.Information));
         actions.Items.AddRange([inventoryMenu, selectionMenu, groupMenu, maintenanceMenu, upgradeMenu, updatesMenu]);
 
@@ -222,7 +229,7 @@ public sealed partial class MainForm : Form
         _routerGrid.AllowDrop = true;
         _routerGrid.DragEnter += MainFormDragEnter;
         _routerGrid.DragDrop += MainFormDragDrop;
-        _routerGrid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.None;
+        _routerGrid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
         _routerGrid.BorderStyle = BorderStyle.None;
         _routerGrid.BackgroundColor = Color.White;
         _routerGrid.GridColor = Color.FromArgb(225, 229, 235);
@@ -234,7 +241,7 @@ public sealed partial class MainForm : Form
         _routerGrid.ColumnHeadersDefaultCellStyle.Font = new Font("Segoe UI", 9, FontStyle.Bold);
         _routerGrid.AlternatingRowsDefaultCellStyle.BackColor = Color.FromArgb(247, 249, 252);
         _routerGrid.Columns.Add(TextColumn(nameof(RouterRecord.Name), "Router", 180));
-        DataGridViewTextBoxColumn groupColumn = TextColumn(nameof(RouterRecord.Group), "Upgrade Group", 105);
+        DataGridViewTextBoxColumn groupColumn = TextColumn(nameof(RouterRecord.Group), "Group", 105);
         groupColumn.MaxInputLength = 80;
         _routerGrid.Columns.Add(groupColumn);
         _routerGrid.Columns.Add(TextColumn(nameof(RouterRecord.Site), "Site", 125, true));
@@ -245,7 +252,7 @@ public sealed partial class MainForm : Form
         _routerGrid.Columns.Add(TextColumn(nameof(RouterRecord.ApiPort), "API Port", 72));
         _routerGrid.Columns.Add(TextColumn(nameof(RouterRecord.Username), "Username", 85));
         _routerGrid.Columns.Add(TextColumn(nameof(RouterRecord.ApiStatus), "API Status", 120, true));
-        _routerGrid.Columns.Add(TextColumn(nameof(RouterRecord.ChannelLabel), "Upgrade channel", 110, true));
+        _routerGrid.Columns.Add(TextColumn(nameof(RouterRecord.ChannelLabel), "Channel", 110, true));
         _routerGrid.Columns.Add(TextColumn(nameof(RouterRecord.RouterOsVersion), "RouterOS", 85, true));
         _routerGrid.Columns.Add(TextColumn(nameof(RouterRecord.FirmwareVersion), "Firmware", 85, true));
         _routerGrid.Columns.Add(TextColumn(nameof(RouterRecord.LastCheckedAt), "Versions checked", 125, true));
@@ -333,7 +340,7 @@ public sealed partial class MainForm : Form
         _jobGrid.AllowUserToAddRows = false;
         _jobGrid.AllowUserToDeleteRows = false;
         _jobGrid.AutoGenerateColumns = false;
-        _jobGrid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.None;
+        _jobGrid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
         _jobGrid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
         _jobGrid.MultiSelect = false;
         _jobGrid.Columns.Add(TextColumn(nameof(UpgradeJob.Name), "Job", 180, true));
@@ -1218,7 +1225,7 @@ public sealed partial class MainForm : Form
             Width = 120
         };
     }
-    private static DataGridViewTextBoxColumn TextColumn(string property, string header, float weight, bool readOnly = false) => new() { DataPropertyName = property, HeaderText = header, Width = (int)weight, MinimumWidth = 55, FillWeight = weight, ReadOnly = readOnly, SortMode = DataGridViewColumnSortMode.Automatic };
+    private static DataGridViewTextBoxColumn TextColumn(string property, string header, float weight, bool readOnly = false) => new() { DataPropertyName = property, HeaderText = header, Width = (int)weight, MinimumWidth = (int)weight, FillWeight = weight, ReadOnly = readOnly, SortMode = DataGridViewColumnSortMode.Automatic };
     private static void AddRow(TableLayoutPanel panel, string label, Control control) { int row = panel.RowCount++; panel.RowStyles.Add(new RowStyle(SizeType.AutoSize)); panel.Controls.Add(new Label { Text = label, AutoSize = true, Padding = new Padding(0, 8, 0, 8) }, 0, row); panel.Controls.Add(control, 1, row); }
 }
 

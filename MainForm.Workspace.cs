@@ -64,22 +64,24 @@ public sealed partial class MainForm
 
     private Control BuildNavigation()
     {
-        var side = new Panel { Dock = DockStyle.Left, Width = 200, BackColor = Color.FromArgb(23, 39, 62), Padding = new Padding(12) };
-        var list = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoScroll = true };
-        list.Controls.Add(new Label { Text = "INDIGO\nMikroTik Manager", ForeColor = Color.White, Font = new Font("Segoe UI", 11, FontStyle.Bold), Size = new Size(162, 86), Padding = new Padding(4, 12, 0, 0) });
+        var side = new Panel { Dock = DockStyle.Left, Width = 180, BackColor = Color.FromArgb(23, 39, 62), Padding = new Padding(12) };
+        var scroll = new Panel { Dock = DockStyle.Fill, AutoScroll = true };
+        var list = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 1, Padding = Padding.Empty, Margin = Padding.Empty };
+        list.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        list.Controls.Add(new Label { Text = "INDIGO\nMikroTik\nManager", ForeColor = Color.White, Font = new Font("Segoe UI", 11, FontStyle.Bold), AutoSize = true, Dock = DockStyle.Fill, Margin = new Padding(0, 0, 0, 16), Padding = new Padding(4, 12, 0, 8) });
         var buttons = new List<(Button Button, TabPage Page)>();
         foreach (TabPage page in _tabs.TabPages)
         {
-            string title = page.Text == "Maintenance Progress" ? "Upgrades / Progress" : page.Text;
-            var button = new Button { Text = title, Width = 160, Height = 45, FlatStyle = FlatStyle.Flat, TextAlign = ContentAlignment.MiddleLeft,
-                Padding = new Padding(12, 0, 0, 0), ForeColor = Color.White, BackColor = side.BackColor, Margin = new Padding(0, 3, 0, 3), Cursor = Cursors.Hand };
+            string title = page.Text == "Maintenance Progress" ? "Maintenance" : page.Text;
+            var button = new Button { Text = title, Dock = DockStyle.Fill, AutoSize = true, MinimumSize = new Size(0, 42), FlatStyle = FlatStyle.Flat, TextAlign = ContentAlignment.MiddleLeft,
+                Padding = new Padding(8, 8, 8, 8), ForeColor = Color.White, BackColor = side.BackColor, Margin = new Padding(0, 3, 0, 3), Cursor = Cursors.Hand };
             button.FlatAppearance.BorderSize = 0; button.Click += (_, _) => _tabs.SelectedTab = page;
             list.Controls.Add(button); buttons.Add((button, page));
         }
         void Highlight() { foreach (var item in buttons) item.Button.BackColor = item.Page == _tabs.SelectedTab ? Color.FromArgb(45, 99, 170) : side.BackColor; }
         _tabs.SelectedIndexChanged += (_, _) => Highlight(); Highlight();
-        side.Controls.Add(list);
-        side.Controls.Add(new Label { Text = "Made for MikroTik\nv0.5.0 • Open source", Dock = DockStyle.Bottom, Height = 55, ForeColor = Color.LightSteelBlue, Padding = new Padding(4, 8, 0, 0) });
+        scroll.Controls.Add(list); side.Controls.Add(scroll);
+        side.Controls.Add(new Label { Text = "Made for MikroTik\nv0.5.1 • Open source", Dock = DockStyle.Bottom, AutoSize = true, ForeColor = Color.LightSteelBlue, Padding = new Padding(4, 8, 0, 0) });
         return side;
     }
 
@@ -105,7 +107,7 @@ public sealed partial class MainForm
             var saved = JsonSerializer.Deserialize<List<ColumnLayout>>(File.ReadAllText(ColumnLayoutPath)) ?? [];
             foreach (var entry in saved)
                 foreach (DataGridViewColumn c in _routerGrid.Columns)
-                    if (c.DataPropertyName == entry.Property) { c.Width = Math.Clamp(entry.Width, 55, 1200); c.Visible = entry.Visible; }
+                    if (c.DataPropertyName == entry.Property) { c.FillWeight = Math.Clamp(entry.Width, 55, 1200); c.Visible = entry.Visible; }
         }
         catch { }
     }
@@ -115,7 +117,7 @@ public sealed partial class MainForm
     }
     private void ChooseColumns(object? sender, EventArgs e)
     {
-        using var dialog = new Form { Text = "Inventory columns", Width = 360, Height = 490, StartPosition = FormStartPosition.CenterParent };
+        using var dialog = new DpiDialog { Text = "Inventory columns", Width = 360, Height = 490, StartPosition = FormStartPosition.CenterParent };
         var choices = new CheckedListBox { Dock = DockStyle.Fill, CheckOnClick = true };
         foreach (DataGridViewColumn c in _routerGrid.Columns) choices.Items.Add(c.HeaderText, c.Visible);
         var save = new Button { Text = "Apply", Dock = DockStyle.Bottom, Height = 38, DialogResult = DialogResult.OK };
@@ -128,7 +130,7 @@ public sealed partial class MainForm
     {
         if (_operationInProgress || _updateInProgress) return;
         var selected = SelectedRouters(); if (selected.Count == 0) { MessageBox.Show("Select devices first."); return; }
-        using var dialog = new Form { Text = $"Site and tags — {selected.Count} devices", Width = 500, Height = 260, StartPosition = FormStartPosition.CenterParent };
+        using var dialog = new DpiDialog { Text = $"Site and tags — {selected.Count} devices", Width = 500, Height = 260, StartPosition = FormStartPosition.CenterParent };
         var layout = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(16), ColumnCount = 2 };
         var site = new TextBox { Width = 290, Text = selected.Count == 1 ? selected[0].Site : "" };
         var tags = new TextBox { Width = 290, Text = selected.Count == 1 ? selected[0].Tags : "", PlaceholderText = "Client-end, Critical, Switch" };
