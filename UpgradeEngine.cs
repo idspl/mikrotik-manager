@@ -25,6 +25,8 @@ public sealed class UpgradeEngine(SecureStore store, AppSettings settings)
     {
         DateTime runStarted = DateTime.Now;
         var queue = routers.DistinctBy(r => r.Id).ToList();
+        if (queue.Where(r => !string.IsNullOrWhiteSpace(r.Host)).GroupBy(r => r.Host.Trim().ToLowerInvariant() + ":" + r.ApiPort).Any(g => g.Count() > 1))
+            throw new InvalidOperationException("The selection contains duplicate API endpoints. Remove duplicate devices before upgrading.");
         var results = new List<RouterRunResult>();
         _history = new MaintenanceHistory { RouterIds = queue.Select(r => r.Id).ToList(), FailureBehavior = options.FailureBehavior, RetryCount = options.RetryCount };
         _history.Save(_store);

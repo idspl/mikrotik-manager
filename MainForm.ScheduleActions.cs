@@ -54,7 +54,7 @@ public sealed partial class MainForm
         if (job.Kind == ScheduledJobKind.Upgrade) effect += "\nThe saved cutoff is ignored for this manual run. Routers may reboot and interrupt service.";
         string names = string.Join("\n", routers.Take(12).Select(r => "• " + r.Name + " (" + r.Host + ")"));
         if (routers.Count > 12) names += $"\n…and {routers.Count - 12} more";
-        if (MessageBox.Show(this, $"Run '{job.Name}' now?\nType: {job.Kind} | Routers: {routers.Count}\n\n{names}\n\n{effect}", "Run Job Now", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
+        if (MessageBox.Show(this, $"Run '{job.Name}' now?\nType: {job.Kind} | Routers: {routers.Count} | Concurrent: {(job.MaxConcurrency == 0 ? "All" : job.MaxConcurrency.ToString())}\n\n{names}\n\n{effect}", "Run Job Now", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
         await RunScheduledInUiAsync(job, manualRun: true);
         RefreshDashboard();
     }

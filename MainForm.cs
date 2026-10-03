@@ -8,7 +8,7 @@ public sealed partial class MainForm : Form
     private readonly IContainer _components = new Container();
     private readonly TabControl _tabs = new() { Dock = DockStyle.Fill, Appearance = TabAppearance.FlatButtons, ItemSize = new Size(0, 1), SizeMode = TabSizeMode.Fixed };
     private TabPage _maintenancePage = null!;
-    private readonly SecureStore _store = new();
+    private readonly SecureStore _store;
     private readonly SortableBindingList<RouterRecord> _routers;
     private readonly BindingList<UpgradeJob> _jobs;
     private readonly DataGridView _routerGrid = new SmoothGrid();
@@ -32,8 +32,9 @@ public sealed partial class MainForm : Form
     private List<Guid> _lastUpgradeRouterIds = [];
     private readonly Button _skipFailedContinue = new() { Text = "Skip Failed & Continue", AutoSize = true, Enabled = false };
 
-    public MainForm()
+    public MainForm(SecureStore? store = null, bool smokeTest = false)
     {
+        _store = store ?? new SecureStore();
         _routerContextMenu = new ContextMenuStrip(_components);
         Text = "MikroTik Manager 0.5.0";
         Font = new Font("Segoe UI", 9F);
@@ -63,6 +64,7 @@ public sealed partial class MainForm : Form
         };
         Shown += async (_, _) =>
         {
+            if (smokeTest) return;
             _ = RefreshRouterOsReleasesAsync();
             _routerGrid.ClearSelection();
             RestoreIncompleteQueue();
