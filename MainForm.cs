@@ -194,7 +194,7 @@ public sealed partial class MainForm : Form
         };
         _statusFilter.Items.AddRange(["All statuses", "Online", "Failed", "Needs attention"]);
         _statusFilter.SelectedIndex = 0;
-        _failureBehavior.DataSource = Enum.GetValues<FailureBehavior>();
+        _failureBehavior.Items.AddRange(Enum.GetValues<FailureBehavior>().Cast<object>().ToArray());
         AppSettings saved = _store.LoadSettings();
         _failureBehavior.SelectedItem = saved.DefaultFailureBehavior;
         _retryCount.Value = Math.Clamp(saved.RetryCount, (int)_retryCount.Minimum, (int)_retryCount.Maximum);
@@ -379,7 +379,8 @@ public sealed partial class MainForm : Form
         var stable = Numeric(current.StableOnlineSeconds, 0, 300);
         var minimumDisk = Numeric(current.MinimumFreeDiskMb, 0, 65535);
         var retention = Numeric(current.BackupRetentionDays, 0, 3650);
-        var defaultFailure = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 180, DataSource = Enum.GetValues<FailureBehavior>() };
+        var defaultFailure = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 180 };
+        defaultFailure.Items.AddRange(Enum.GetValues<FailureBehavior>().Cast<object>().ToArray());
         defaultFailure.SelectedItem = current.DefaultFailureBehavior;
         var retries = Numeric(current.RetryCount, 0, 5);
         var updateChecks = new CheckBox { Checked = current.CheckForUpdatesAtStartup, Text = "Check GitHub releases at startup", AutoSize = true };

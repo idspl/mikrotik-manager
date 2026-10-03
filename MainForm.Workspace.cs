@@ -14,6 +14,7 @@ public sealed partial class MainForm
     private readonly ConcurrentQueue<string> _pendingLog = new();
     private readonly Label _selectionLabel = new() { Text = "Select devices to begin", AutoSize = true, Padding = new Padding(6, 8, 18, 0) };
     private readonly Label _runTotals = new() { Dock = DockStyle.Bottom, Height = 36, Padding = new Padding(12, 8, 0, 0), BackColor = Color.FromArgb(232, 241, 252) };
+    private readonly ProgressBar _runOverall = new() { Dock = DockStyle.Bottom, Height = 7, Maximum = 100, Style = ProgressBarStyle.Continuous };
     private readonly NumericUpDown _scheduleConcurrency = new() { Minimum = 0, Maximum = 10000, Value = 1, Width = 65 };
     private int _batchConcurrency = 5, _batchFailureLimit;
     private bool _inventoryDirty;
@@ -23,6 +24,7 @@ public sealed partial class MainForm
     private void StartUiPump()
     {
         _maintenancePage.Controls.Add(_runTotals);
+        _maintenancePage.Controls.Add(_runOverall);
         var timer = new System.Windows.Forms.Timer(_components) { Interval = 200 };
         timer.Tick += (_, _) => FlushUiUpdates(); timer.Start();
     }
@@ -55,7 +57,9 @@ public sealed partial class MainForm
             else _log.Select(selection, length);
         }
         int done = _progressRows.Count(r => r.Result == "Completed"), failed = _progressRows.Count(r => r.Result == "Failed"), queued = _progressRows.Count(r => r.Result == "Pending");
-        _runTotals.Text = $"{_progressRows.Count} devices   •   {queued} queued   •   {_progressRows.Count(r => r.Result is "Running" or "Retrying")} running   •   {done} completed   •   {failed} failed";
+        int percent = _progressRows.Count == 0 ? 0 : (int)_progressRows.Average(r => r.Result is "Completed" or "Failed" or "Cancelled" ? 100 : Math.Clamp(r.Progress, 0, 100));
+        _runOverall.Value = percent;
+        _runTotals.Text = $"{percent}% (stage estimate)   •   {queued} queued   •   {_progressRows.Count(r => r.Result is "Running" or "Retrying")} running   •   {done} completed   •   {failed} failed";
     }
 
     private Control BuildNavigation()

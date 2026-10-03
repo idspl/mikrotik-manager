@@ -5,6 +5,7 @@ public sealed partial class MainForm
     internal void RenderSmokeViews()
     {
         // Called only by --self-test with an isolated temporary SecureStore.
+        if (_failureBehavior.SelectedItem is not FailureBehavior policy || policy != _store.LoadSettings().DefaultFailureBehavior) throw new Exception("Failure policy default was not selected.");
         _suspendRouterSaves = true; _routers.RaiseListChangedEvents = false;
         for (int i = 0; i < 1000; i++) _routers.Add(new RouterRecord {
             Name = $"Client-{i + 1:0000}", Host = $"192.0.{2 + i / 250}.{1 + i % 250}", Site = i % 2 == 0 ? "Davanagere" : "Shivamogga",

@@ -23,7 +23,8 @@ public sealed partial class MainForm
         var name = new TextBox { Width = 400, Text = existing?.Name ?? "Daily router backups" };
         var start = new DateTimePicker { Width = 220, Format = DateTimePickerFormat.Custom, CustomFormat = "dd MMM yyyy HH:mm",
             Value = existing?.ScheduledLocalTime > DateTime.Now.AddMinutes(2) ? existing.ScheduledLocalTime : DateTime.Now.AddHours(1) };
-        var repeat = new ComboBox { Width = 180, DropDownStyle = ComboBoxStyle.DropDownList, DataSource = Enum.GetValues<BackupRecurrence>() };
+        var repeat = new ComboBox { Width = 180, DropDownStyle = ComboBoxStyle.DropDownList };
+        repeat.Items.AddRange(Enum.GetValues<BackupRecurrence>().Cast<object>().ToArray());
         repeat.SelectedItem = existing?.Recurrence ?? BackupRecurrence.Daily;
         var folder = new TextBox { Width = 330, Text = existing?.BackupFolder ?? @"C:\MikroTikBackups" };
         var retention = Numeric(existing?.RetentionDays ?? 30, 0, 3650);
