@@ -10,6 +10,7 @@ public sealed partial class MainForm
             Name = $"Client-{i + 1:0000}", Host = $"192.0.{2 + i / 250}.{1 + i % 250}", Site = i % 2 == 0 ? "Davanagere" : "Shivamogga",
             Group = "Client-end", Tags = "Customer", Model = "RB750Gr3", ApiStatus = i % 7 == 0 ? "Failed" : "Online", RouterOsVersion = "7.24.4", FirmwareVersion = "7.24.4", LastStatus = "Snapshot fixture" });
         _routers.RaiseListChangedEvents = true; _routers.ResetBindings();
+        RefreshDashboard();
         Show(); Application.DoEvents();
         void Capture(string name)
         {

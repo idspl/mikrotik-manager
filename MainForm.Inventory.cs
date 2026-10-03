@@ -61,7 +61,7 @@ public sealed partial class MainForm
         var grid = new DataGridView { Dock = DockStyle.Fill, ReadOnly = true, AllowUserToAddRows = false, SelectionMode = DataGridViewSelectionMode.FullRowSelect, MultiSelect = false,
             AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.DisplayedCells,
             DataSource = entries.Select(x => new { x.Router, x.Backup.CreatedAt, x.Backup.Verification,
-                Files = File.Exists(x.Backup.BackupPath) && File.Exists(x.Backup.ExportPath) ? "Present" : "Missing / moved / retention removed",
+                Files = "Use Verify Selected Files to check",
                 x.Backup.BackupPath, x.Backup.ExportPath, x.Backup.BackupHash, x.Backup.ExportHash }).ToList() };
         var bar = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = 45 };
         var open = Button("Open Folder", (_, _) =>

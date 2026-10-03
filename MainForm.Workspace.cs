@@ -49,6 +49,7 @@ public sealed partial class MainForm
             int selection = _log.SelectionStart, length = _log.SelectionLength;
             var lines = new List<string>();
             while (lines.Count < 250 && _pendingLog.TryDequeue(out var line)) lines.Add(line);
+            if (_log.TextLength > 250000 && follow) _log.Clear();
             _log.AppendText(string.Join(Environment.NewLine, lines) + Environment.NewLine);
             if (follow) { _log.SelectionStart = _log.TextLength; _log.ScrollToCaret(); }
             else _log.Select(selection, length);
@@ -59,14 +60,14 @@ public sealed partial class MainForm
 
     private Control BuildNavigation()
     {
-        var side = new Panel { Dock = DockStyle.Left, Width = 195, BackColor = Color.FromArgb(23, 39, 62), Padding = new Padding(12) };
+        var side = new Panel { Dock = DockStyle.Left, Width = 200, BackColor = Color.FromArgb(23, 39, 62), Padding = new Padding(12) };
         var list = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoScroll = true };
-        list.Controls.Add(new Label { Text = "INDIGO\nMikroTik Manager", ForeColor = Color.White, Font = new Font("Segoe UI", 13, FontStyle.Bold), Size = new Size(166, 90), Padding = new Padding(4, 12, 0, 0) });
+        list.Controls.Add(new Label { Text = "INDIGO\nMikroTik Manager", ForeColor = Color.White, Font = new Font("Segoe UI", 11, FontStyle.Bold), Size = new Size(162, 86), Padding = new Padding(4, 12, 0, 0) });
         var buttons = new List<(Button Button, TabPage Page)>();
         foreach (TabPage page in _tabs.TabPages)
         {
             string title = page.Text == "Maintenance Progress" ? "Upgrades / Progress" : page.Text;
-            var button = new Button { Text = title, Width = 165, Height = 45, FlatStyle = FlatStyle.Flat, TextAlign = ContentAlignment.MiddleLeft,
+            var button = new Button { Text = title, Width = 160, Height = 45, FlatStyle = FlatStyle.Flat, TextAlign = ContentAlignment.MiddleLeft,
                 Padding = new Padding(12, 0, 0, 0), ForeColor = Color.White, BackColor = side.BackColor, Margin = new Padding(0, 3, 0, 3), Cursor = Cursors.Hand };
             button.FlatAppearance.BorderSize = 0; button.Click += (_, _) => _tabs.SelectedTab = page;
             list.Controls.Add(button); buttons.Add((button, page));

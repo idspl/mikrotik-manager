@@ -165,6 +165,11 @@ public sealed partial class MainForm : Form
         foreach (string channel in RouterChannels.Allowed)
             channels.DropDownItems.Add(channel, null, (_, _) => SetSelectedChannel(channel));
         upgradeMenu.DropDownItems.Add(channels);
+        var policies = new ToolStripMenuItem("Failure Policy");
+        foreach (var policy in Enum.GetValues<FailureBehavior>()) policies.DropDownItems.Add(FriendlyBehavior(policy), null, (_, _) => _failureBehavior.SelectedItem = policy);
+        var retryMenu = new ToolStripMenuItem("Retry Count");
+        for (int i = 0; i <= 5; i++) { int count = i; retryMenu.DropDownItems.Add(count.ToString(), null, (_, _) => _retryCount.Value = count); }
+        upgradeMenu.DropDownItems.Add(policies); upgradeMenu.DropDownItems.Add(retryMenu);
         upgradeMenu.DropDownItems.Add("Resume Incomplete Queue", null, ResumeIncomplete);
         upgradeMenu.DropDownItems.Add("Pause New Starts", null, PauseAfterRouter);
         upgradeMenu.DropDownItems.Add("Maintenance History", null, ShowHistory);
@@ -201,10 +206,6 @@ public sealed partial class MainForm : Form
         filters.Items.Add(new ToolStripLabel("Group"));
         filters.Items.Add(new ToolStripControlHost(_groupSelector) { AutoSize = false, Width = 150 });
         filters.Items.Add(new ToolStripSeparator());
-        filters.Items.Add(new ToolStripLabel("On failure"));
-        filters.Items.Add(new ToolStripControlHost(_failureBehavior) { AutoSize = false, Width = 135 });
-        filters.Items.Add(new ToolStripLabel("Retries"));
-        filters.Items.Add(new ToolStripControlHost(_retryCount) { AutoSize = false, Width = 55 });
         filters.Items.Add(new ToolStripLabel("Select rows with Ctrl or Shift") { ForeColor = Color.DimGray });
 
         header.Controls.Add(actions, 0, 0);
@@ -763,7 +764,7 @@ public sealed partial class MainForm : Form
                     token.ThrowIfCancellationRequested();
                     RouterRecord router = selected[next++];
                     router.LastStatus = "Fetching versions";
-                    _routerGrid.Invalidate();
+                    RequestInventoryPaint();
                     try
                     {
                         RouterSnapshot result = await engine.TestAndReadAsync(router, token);
@@ -790,7 +791,7 @@ public sealed partial class MainForm : Form
                     }
                     completed++;
                     _status.Text = $"Versions: {completed} of {selected.Count} completed; {failed} failed";
-                    _routerGrid.Invalidate();
+                    RequestInventoryPaint();
                 }
             }
             await Task.WhenAll(Enumerable.Range(0, Math.Min(8, selected.Count)).Select(_ => WorkerAsync()));
@@ -805,7 +806,7 @@ public sealed partial class MainForm : Form
         {
             try { SaveRouters(); }
             catch (Exception ex) { ShowError(ex); }
-            _routerGrid.Invalidate();
+            RequestInventoryPaint();
             SetBusy(false, summary);
             _running.Dispose(); _running = null;
         }
@@ -995,7 +996,7 @@ public sealed partial class MainForm : Form
         if (_operationInProgress) return;
         if (_scheduleWindow.Checked && _scheduleEnd.Value <= _scheduleTime.Value) { MessageBox.Show("Cutoff must be after the scheduled start."); return; }
         List<RouterRecord> selected = SelectedRouters();
-        if (selected.Count == 0) { MessageBox.Show("Select the routers on the Routers tab first."); return; }
+        if (selected.Count == 0) { MessageBox.Show("Select the routers on the Devices page first."); return; }
         var job = new UpgradeJob
         {
             Name = string.IsNullOrWhiteSpace(_jobName.Text) ? $"Maintenance {_scheduleTime.Value:dd-MM-yyyy HH:mm}" : _jobName.Text.Trim(),
@@ -1047,6 +1048,7 @@ public sealed partial class MainForm : Form
         }
         _progressRows.RaiseListChangedEvents = true;
         _progressRows.ResetBindings();
+        _progressGrid.ClearSelection();
     }
 
     private void ApplyProgress(MaintenanceProgressUpdate update)
@@ -1195,7 +1197,14 @@ public sealed partial class MainForm : Form
     }
     private void ShowError(Exception ex) => MessageBox.Show(ex.Message, Text, MessageBoxButtons.OK, MessageBoxIcon.Error);
 
-    private static Button Button(string text, EventHandler click) { var b = new Button { Text = text, AutoSize = true, Height = 28 }; b.Click += click; return b; }
+    private static Button Button(string text, EventHandler click)
+    {
+        var b = new Button { Text = text, AutoSize = true, MinimumSize = new Size(0, 32), FlatStyle = FlatStyle.Flat,
+            Padding = new Padding(7, 3, 7, 3), BackColor = Color.White, ForeColor = Color.FromArgb(28, 49, 78), Cursor = Cursors.Hand };
+        b.FlatAppearance.BorderColor = Color.FromArgb(205, 215, 228);
+        if (text.StartsWith("Upgrade Selected") || text.StartsWith("Create Upgrade")) { b.BackColor = Color.FromArgb(40, 96, 166); b.ForeColor = Color.White; }
+        b.Click += click; return b;
+    }
     private static NumericUpDown Numeric(int value, int min, int max)
     {
         // Minimum and Maximum must be assigned before Value. NumericUpDown's
