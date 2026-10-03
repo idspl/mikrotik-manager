@@ -7,6 +7,32 @@ public sealed partial class MainForm
     private DateTime? _upgradeWindowEnd;
     private bool _canaryPerGroup;
 
+    internal static List<Guid> PendingAfterFailures(IEnumerable<Guid> queue, IEnumerable<MaintenanceProgressRow> progress)
+    {
+        var rows = progress.ToList();
+        if (!rows.Any(x => x.Result == "Failed")) return [];
+        var pending = rows.Where(x => x.Result == "Pending" && x.Stage == "Queued" && x.Attempt == 0)
+            .Select(x => x.RouterId).ToHashSet();
+        return queue.Where(pending.Contains).Distinct().ToList();
+    }
+
+    private void UpdateSkipFailedButton()
+    {
+        _skipFailedContinue.Enabled = !_operationInProgress && !_updateInProgress &&
+            PendingAfterFailures(_lastUpgradeRouterIds, _progressRows).Any(id => _routers.Any(x => x.Id == id));
+    }
+
+    private async void SkipFailedAndContinue(object? sender, EventArgs e)
+    {
+        if (_operationInProgress || _updateInProgress) return;
+        var pending = PendingAfterFailures(_lastUpgradeRouterIds, _progressRows);
+        var routers = pending.Select(id => _routers.FirstOrDefault(x => x.Id == id)).OfType<RouterRecord>().ToList();
+        if (routers.Count == 0) { MessageBox.Show("No unstarted routers remain after the failed routers."); return; }
+        // RunUpgradeAsync presents readiness, queue order, and cutoff/group controls
+        // before starting. Failed, completed and interrupted routers are excluded.
+        await RunUpgradeAsync(routers, FailureBehavior.Skip, 0);
+    }
+
     private void PauseAfterRouter(object? sender, EventArgs e)
     {
         if (_activeUpgrade is null) return;
@@ -90,12 +116,14 @@ public sealed partial class MainForm
         foreach (var row in _progressRows)
         {
             HistoryStage? stage = run.Stages.LastOrDefault(x => x.RouterId == row.RouterId);
-            row.Result = run.CompletedIds.Contains(row.RouterId) ? "Completed" : "Pending";
+            row.Result = run.CompletedIds.Contains(row.RouterId) ? "Completed" : stage is null ? "Pending"
+                : stage.Result is "Failed" or "Cancelled" ? stage.Result : "Interrupted";
             row.Stage = stage?.Stage ?? "Queued";
             row.Message = stage?.Message ?? "Not started";
             row.Attempt = stage?.Attempt ?? 0;
         }
         _progressRows.ResetBindings();
+        UpdateSkipFailedButton();
         if (run.RouterIds.Except(run.CompletedIds).Any())
             _status.Text = "Incomplete maintenance found. Review History, then Resume Incomplete Queue to re-check before upgrading.";
     }
