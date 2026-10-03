@@ -15,6 +15,7 @@ public sealed partial class MainForm
         RefreshDashboard();
         Show(); Application.DoEvents();
         ApplyLayoutTestScale(this, scale);
+        MaximumSize = new Size(4096, 2160);
         Size = new Size(1920, 1040); PerformLayout(); Application.DoEvents();
         void Capture(string name)
         {
@@ -47,7 +48,7 @@ public sealed partial class MainForm
         _tabs.SelectedTab = _tabs.TabPages.Cast<TabPage>().Single(p => p.Text == "Backups");
         _backupCoverage.Text = "57 devices • 0 covered • 57 never backed up • 57 unscheduled\n0 overdue • 0 failed • 0 missing files | Checked 22:42:00";
         Application.DoEvents(); Capture("backups");
-        if (_backupCoverage.Height < _backupCoverage.GetPreferredSize(new Size(_backupCoverage.Width, 0)).Height || _backupGrid.Top < _backupCoverage.Bottom)
+        if (_backupGrid.Height < 100 || _backupCoverage.Height < _backupCoverage.GetPreferredSize(new Size(_backupCoverage.Width, 0)).Height || _backupGrid.Top < _backupCoverage.Bottom)
             throw new Exception("Backup summary overlaps table at " + scale);
         using (var dialog = BuildUpgradeScheduleDialog(out _, out var date, out _, out _, out _))
         {
