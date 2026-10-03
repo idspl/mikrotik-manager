@@ -1,4 +1,4 @@
-# MikroTik Manager 0.4.1
+# MikroTik Manager 0.5.0
 
 [![Windows build](https://github.com/idspl/mikrotik-manager/actions/workflows/windows-build.yml/badge.svg)](https://github.com/idspl/mikrotik-manager/actions/workflows/windows-build.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -36,6 +36,18 @@ MikroTik Manager is currently distributed without a paid Authenticode certificat
 Do not run the file if it came from another website, the checksum differs, VirusTotal reports multiple credible detections, or the release cannot be matched to this repository. A single generic or heuristic detection can be a false positive; investigate it rather than assuming either safety or infection.
 
 Use a test router before production deployment. Router upgrades, reboots and sensitive configuration exports can interrupt services or expose credentials if operated without appropriate controls.
+
+## 0.5.0 workspace and parallel maintenance
+
+- Sidebar navigation, an inventory selection action bar, configurable/persisted column widths and visibility, clearer schedule creation, dedicated Backups workspace and live maintenance totals.
+- Double-buffered fixed-height grids batch progress at 200 ms intervals. Only visible inventory rows are invalidated; progress no longer resets row bindings for each message. Upgrade log updates are batched. Jobs preserve the inventory's scroll/selection; explicit filtering changes which rows are visible.
+- Upgrade preview supports concurrency (default 5 for manual upgrades; 1 preserves sequential behavior; 0 means all selected), a final-failure threshold, and an optional test router per upgrade group with approval. With test mode, groups run one at a time. Stop policies stop new starts after the first final failure. Active routers finish when paused or stopped by a failure limit; cancellation interrupts API waits but cannot undo commands sent. Use parallel mode only for independently reachable devices; dependency topology is not inferred.
+- Scheduled upgrades expose concurrency. Existing schedules default to 1. Run Now uses the schedule's saved concurrency. Scheduled jobs do not prompt for test-device approval.
+- Device Details (double-click or Inventory menu) reads resource, board, health and interfaces via the existing RouterOS API. Read a selected port's traffic, Ethernet link rate and SFP diagnostics where supported. Readings are on-demand snapshots with timestamps; unsupported/denied readings remain unavailable. No SSH, REST or arbitrary scripting is introduced.
+- Site and tags are independent of upgrade groups. Select devices and use Site / Tags to assign in bulk; inventory search matches these fields, then Select All Visible targets the matching devices.
+- Backups shows never backed up, no active schedule, overdue jobs, last attempt failures and missing local files. Refresh Coverage probes files off the UI thread. Counts may overlap. Backup comparison highlights added/removed lines, ignores export timestamps, and hides all configuration content until explicitly revealed. RouterOS version changes remain visible as changes. Large diffs use a bounded replacement comparison; files over 4 MB or 20,000 lines require an external editor. No restore action is added.
+- Configuration archive schema 3 preserves site/tags and parallel schedule options; schemas 1 and 2 remain importable. Older applications cannot import schema 3.
+- Validation includes synthetic dispatcher concurrency/failure/pause tests, configuration comparison and Windows workspace construction. Actual router upgrades, optics compatibility and interactive scrolling require testing on your hardware.
 
 ## 0.4.1 schedule actions
 

@@ -12,7 +12,8 @@ public sealed class UpgradeEngine(SecureStore store, AppSettings settings)
     public bool PauseRequested { get => _pauseRequested; set => _pauseRequested = value; }
     private volatile bool _pauseRequested;
     private MaintenanceHistory? _history;
-    private readonly System.Diagnostics.Stopwatch _elapsed = new();
+    private readonly object _sync = new();
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<Guid, System.Diagnostics.Stopwatch> _timers = new();
 
     public Task<MaintenanceRunResult> RunSequentialAsync(IEnumerable<RouterRecord> routers, CancellationToken cancellationToken)
         => RunSequentialAsync(routers, new UpgradeRunOptions(FailureBehavior.Stop, 0), cancellationToken);
@@ -23,17 +24,41 @@ public sealed class UpgradeEngine(SecureStore store, AppSettings settings)
         CancellationToken cancellationToken)
     {
         DateTime runStarted = DateTime.Now;
+        var queue = routers.DistinctBy(r => r.Id).ToList();
         var results = new List<RouterRunResult>();
-        var testedGroups = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        routers = routers.ToList();
-        _history = new MaintenanceHistory { RouterIds = routers.Select(x => x.Id).ToList(),
-            FailureBehavior = options.FailureBehavior, RetryCount = options.RetryCount };
+        _history = new MaintenanceHistory { RouterIds = queue.Select(r => r.Id).ToList(), FailureBehavior = options.FailureBehavior, RetryCount = options.RetryCount };
         _history.Save(_store);
-        foreach (RouterRecord router in routers)
+        int limit = options.FailureBehavior is FailureBehavior.Stop or FailureBehavior.RetryThenStop ? 1 : options.FailureLimit;
+        bool Stop() => PauseRequested || options.WindowEnd is { } end && DateTime.Now >= end;
+        try
         {
-            if (PauseRequested || options.WindowEnd is { } end && DateTime.Now >= end) break;
-            cancellationToken.ThrowIfCancellationRequested();
-            _elapsed.Restart();
+            var groups = options.CanaryPerGroup ? queue.GroupBy(r => r.Group, StringComparer.OrdinalIgnoreCase).Select(g => g.ToList()).ToList() : new List<List<RouterRecord>> { queue };
+            foreach (var group in groups)
+            {
+                if (Stop() || limit > 0 && results.Count(r => r.Result == "Failed") >= limit) break;
+                if (options.CanaryPerGroup && group.Count > 0)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    var canary = group[0]; group.RemoveAt(0);
+                    var tested = await RunOneAsync(canary, options, cancellationToken); results.Add(tested);
+                    if (tested.Result != "Completed") break;
+                    if (group.Count > 0 && (ConfirmGroupAsync is null || !await ConfirmGroupAsync(canary, cancellationToken))) { PauseRequested = true; break; }
+                }
+                int remainingLimit = limit == 0 ? 0 : Math.Max(1, limit - results.Count(r => r.Result == "Failed"));
+                results.AddRange(await BatchUpgradeQueue.RunAsync(group, options.MaxConcurrency, remainingLimit, Stop,
+                    r => RunOneAsync(r, options, cancellationToken), cancellationToken));
+            }
+            return new MaintenanceRunResult(runStarted, DateTime.Now, queue.Select(r => results.FirstOrDefault(x => x.RouterId == r.Id)).OfType<RouterRunResult>().ToList());
+        }
+        finally
+        {
+            lock (_sync) { _history.State = _history.CompletedIds.Count == queue.Count ? "Finished" : cancellationToken.IsCancellationRequested ? "Cancelled" : PauseRequested ? "Paused" : "Stopped"; _history.Save(_store); }
+        }
+    }
+
+    private async Task<RouterRunResult> RunOneAsync(RouterRecord router, UpgradeRunOptions options, CancellationToken cancellationToken)
+    {
+            _timers[router.Id] = System.Diagnostics.Stopwatch.StartNew();
             DateTime started = DateTime.Now;
             int maximumAttempts = options.FailureBehavior is FailureBehavior.RetryThenSkip or FailureBehavior.RetryThenStop
                 ? Math.Max(1, options.RetryCount + 1)
@@ -56,8 +81,7 @@ public sealed class UpgradeEngine(SecureStore store, AppSettings settings)
                     failure = null;
                     router.LastStatus = "Completed";
                     Report(router, "Completed", attempt, 100, "Completed", outcome);
-                    _history.CompletedIds.Add(router.Id);
-                    _history.Save(_store);
+                    lock (_sync) { _history!.CompletedIds.Add(router.Id); _history.Save(_store); }
                     completed = true;
                     break;
                 }
@@ -81,27 +105,10 @@ public sealed class UpgradeEngine(SecureStore store, AppSettings settings)
                 }
             }
 
-            results.Add(new RouterRunResult(
+            return new RouterRunResult(
                 router.Id, router.Name, router.Host, completed ? "Completed" : "Failed", attempts,
-                router.RouterOsVersion, router.FirmwareVersion, failure?.Message ?? outcome, started, DateTime.Now));
+                router.RouterOsVersion, router.FirmwareVersion, failure?.Message ?? outcome, started, DateTime.Now);
 
-            if (options.CanaryPerGroup && testedGroups.Add(router.Group))
-            {
-                if (!completed) break;
-                bool moreInGroup = routers.Any(x => x.Id != router.Id && string.Equals(x.Group, router.Group, StringComparison.OrdinalIgnoreCase)
-                    && !results.Any(r => r.RouterId == x.Id));
-                if (moreInGroup && (ConfirmGroupAsync is null || !await ConfirmGroupAsync(router, cancellationToken)))
-                { PauseRequested = true; break; }
-            }
-
-            if (!completed && options.FailureBehavior is FailureBehavior.Stop or FailureBehavior.RetryThenStop)
-            {
-                break;
-            }
-        }
-        _history.State = results.Count == _history.RouterIds.Count ? "Finished" : PauseRequested ? "Paused" : "Stopped";
-        _history.Save(_store);
-        return new MaintenanceRunResult(runStarted, DateTime.Now, results);
     }
 
     public async Task<RouterSnapshot> TestAndReadAsync(RouterRecord router, CancellationToken ct)
@@ -125,7 +132,7 @@ public sealed class UpgradeEngine(SecureStore store, AppSettings settings)
             long.TryParse(resource.GetValueOrDefault("free-hdd-space"), out long freeBytes);
             long.TryParse(resource.GetValueOrDefault("total-hdd-space"), out long totalBytes);
             StorageRequirement storage = StoragePolicy.Resolve(snapshot.Model, totalBytes, _settings.MinimumFreeDiskMb);
-            router.ApiStatus = "Online";
+            router.ApiStatus = "Online"; router.LastSeenAt = DateTime.Now;
             router.Model = snapshot.Model;
             router.RouterOsVersion = snapshot.RouterOsVersion;
             router.FirmwareVersion = snapshot.CurrentFirmware;
@@ -175,9 +182,11 @@ public sealed class UpgradeEngine(SecureStore store, AppSettings settings)
             if (string.IsNullOrEmpty(router.BackupPassword))
                 router.BackupPassword = Convert.ToHexString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(18));
             // Persist the generated recovery secret before creating its encrypted backup.
+            lock (_sync) {
             var saved = _store.LoadRouters();
             var savedRouter = saved.FirstOrDefault(x => x.Id == router.Id);
             if (savedRouter is not null) { savedRouter.BackupPassword = router.BackupPassword; _store.SaveRouters(saved); }
+            }
             Report(router, "Safety backup", attempt, 25, "Running", "Creating encrypted on-router safety backup");
             try
             {
@@ -255,7 +264,7 @@ public sealed class UpgradeEngine(SecureStore store, AppSettings settings)
             }
             Report(router, "Interface verification", attempt, 97, "Running", "Verifying configured critical interfaces");
             await VerifyInterfacesAsync(api, router, _settings.InterfaceRecoverySeconds, ct);
-            router.ApiStatus = "Online";
+            router.ApiStatus = "Online"; router.LastSeenAt = DateTime.Now;
             router.LastCheckedAt = router.LastApiCheckAt = DateTime.Now;
             router.AvailableFirmware = (await GetSnapshotAsync(api, ct)).UpgradeFirmware;
         }
@@ -353,7 +362,7 @@ public sealed class UpgradeEngine(SecureStore store, AppSettings settings)
             ? message
             : message.Replace(router.Password, "<redacted>", StringComparison.Ordinal);
         string line = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss}\t{router.Name}\t{router.Host}\t{stage}\t{safeMessage}";
-        File.AppendAllText(Path.Combine(_store.LogDirectory, $"upgrade-{DateTime.Now:yyyy-MM-dd}.log"), line + Environment.NewLine);
+        lock (_sync) File.AppendAllText(Path.Combine(_store.LogDirectory, $"upgrade-{DateTime.Now:yyyy-MM-dd}.log"), line + Environment.NewLine);
         Message?.Invoke(line);
     }
 
@@ -361,7 +370,9 @@ public sealed class UpgradeEngine(SecureStore store, AppSettings settings)
     {
         foreach (string secret in new[] { router.Password, router.BackupPassword })
             if (!string.IsNullOrEmpty(secret)) message = message.Replace(secret, "<redacted>", StringComparison.Ordinal);
-        message += $" (elapsed {_elapsed.Elapsed:hh\\:mm\\:ss})";
+        var elapsed = _timers.TryGetValue(router.Id, out var timer) ? timer.Elapsed : TimeSpan.Zero;
+        message += $" (elapsed {elapsed:hh\\:mm\\:ss})";
+        lock (_sync)
         if (_history is not null)
         {
             _history.Stages.Add(new HistoryStage(DateTime.Now, router.Id, router.Name, stage, attempt,

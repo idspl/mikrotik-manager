@@ -34,12 +34,12 @@ internal static class ConfigurationArchive
             using var aes = new AesGcm(key, 16);
             aes.Decrypt(bytes.AsSpan(24, 12), bytes.AsSpan(52), bytes.AsSpan(36, 16), clear, Magic);
             var bundle = JsonSerializer.Deserialize<ConfigurationBundle>(clear) ?? throw new InvalidDataException("Empty archive.");
-            if (bundle.Version is not (1 or 2) || bundle.Routers is null || bundle.Jobs is null || bundle.Settings is null
+            if (bundle.Version is not (1 or 2 or 3) || bundle.Routers is null || bundle.Jobs is null || bundle.Settings is null
                 || bundle.Routers.Any(x => x.ApiPort < 1 || x.ApiPort > 65535 || string.IsNullOrWhiteSpace(x.Host))
                 || bundle.Routers.Select(x => x.Id).Distinct().Count() != bundle.Routers.Count
-                || bundle.Routers.Any(x => x.Id == Guid.Empty || x.Backups is null || x.CriticalInterfaces is null)
+                || bundle.Routers.Any(x => x.Id == Guid.Empty || x.Backups is null || x.CriticalInterfaces is null || x.Site is null || x.Tags is null)
                 || bundle.Routers.Any(x => x.UpdateChannel != "" && !RouterChannels.Allowed.Contains(x.UpdateChannel))
-                || bundle.Jobs.Any(x => !Enum.IsDefined(x.Kind) || !Enum.IsDefined(x.Recurrence) || x.RetentionDays is < 0 or > 3650
+                || bundle.Jobs.Any(x => x.MaxConcurrency is < 0 or > 10000 || x.FailureLimit is < 0 or > 10000 || !Enum.IsDefined(x.Kind) || !Enum.IsDefined(x.Recurrence) || x.RetentionDays is < 0 or > 3650
                     || x.Kind == ScheduledJobKind.Upgrade && x.Recurrence != BackupRecurrence.Once
                     || x.Kind == ScheduledJobKind.Backup && (string.IsNullOrWhiteSpace(x.BackupFolder) || !Path.IsPathFullyQualified(x.BackupFolder)))
                 || bundle.Settings.DefaultApiPort is < 1 or > 65535

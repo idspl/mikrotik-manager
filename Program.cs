@@ -81,7 +81,7 @@ internal static class Program
             {
             var engine = new UpgradeEngine(store, store.LoadSettings());
             MaintenanceRunResult result = await engine.RunSequentialAsync(selected,
-                new UpgradeRunOptions(job.FailureBehavior, job.RetryCount, job.WindowEnd), CancellationToken.None);
+                new UpgradeRunOptions(job.FailureBehavior, job.RetryCount, job.WindowEnd, MaxConcurrency: job.MaxConcurrency, FailureLimit: job.FailureLimit), CancellationToken.None);
             await new MaintenanceReportService(store).WriteAsync(result);
             job.State = result.Failed == 0 && result.Routers.Count == selected.Count
                 ? "Completed"

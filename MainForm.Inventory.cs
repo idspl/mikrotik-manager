@@ -13,6 +13,8 @@ public sealed partial class MainForm
         var router = selected[0];
         using var dialog = new ManualRouterDialog(router.ApiPort, router);
         if (dialog.ShowDialog(this) != DialogResult.OK || dialog.Router is not { } edited) return;
+        edited.Site = router.Site; edited.Tags = router.Tags; edited.LastSeenAt = router.LastSeenAt;
+        edited.LastBackupAttemptAt = router.LastBackupAttemptAt; edited.LastBackupError = router.LastBackupError;
         edited.Id = router.Id; edited.BackupPassword = router.BackupPassword; edited.Backups = router.Backups;
         if (edited.Host == router.Host && edited.ApiPort == router.ApiPort)
         {
@@ -104,7 +106,7 @@ public sealed partial class MainForm
         SetBusy(true, "Encrypting configuration...");
         try
         {
-            var bundle = new ConfigurationBundle(2, _routers.ToList(), _jobs.ToList(), _store.LoadSettings());
+            var bundle = new ConfigurationBundle(3, _routers.ToList(), _jobs.ToList(), _store.LoadSettings());
             byte[] encrypted = await Task.Run(() => ConfigurationArchive.Encrypt(bundle, password));
             await File.WriteAllBytesAsync(dialog.FileName, encrypted);
             MessageBox.Show("Encrypted configuration exported. Keep its password separately. Local backup files are not included.");

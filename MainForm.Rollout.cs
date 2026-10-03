@@ -79,7 +79,7 @@ public sealed partial class MainForm
             {
             var engine = CreateEngine(); _activeUpgrade = engine;
             var result = await Task.Run(() => engine.RunSequentialAsync(selected,
-                new UpgradeRunOptions(job.FailureBehavior, job.RetryCount, manualRun ? null : job.WindowEnd), _running.Token));
+                new UpgradeRunOptions(job.FailureBehavior, job.RetryCount, manualRun ? null : job.WindowEnd, MaxConcurrency: job.MaxConcurrency, FailureLimit: job.FailureLimit), _running.Token));
             await new MaintenanceReportService(_store).WriteAsync(result);
             job.State = result.Failed == 0 && result.Routers.Count == selected.Count ? "Completed"
                 : $"Finished: {result.Failed} failed; {selected.Count - result.Routers.Count} not processed";
@@ -89,12 +89,13 @@ public sealed partial class MainForm
         catch (Exception ex) { job.State = "Failed: " + ex.Message; }
         finally
         {
+            FlushUiUpdates();
             bool success = job.State == "Completed";
             string result = success && job.Kind == ScheduledJobKind.Backup ? job.LastRunResult : job.State;
             BackupSchedulePolicy.Finish(job, success, result, DateTime.Now, manualRun ? previousState : null); _activeUpgrade = null;
             try { SaveAll(); } catch (Exception ex) { ShowError(ex); }
             _running.Dispose(); _running = null; SetBusy(false, job.Name + ": " + job.LastRunResult);
-            _jobGrid.Refresh(); _routerGrid.Refresh();
+            _jobGrid.Refresh(); RequestInventoryPaint();
         }
     }
 

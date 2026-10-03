@@ -22,6 +22,7 @@ public sealed class RouterBackupService(AppSettings settings, int? retentionDays
         foreach (RouterRecord router in routers)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            router.LastBackupAttemptAt = DateTime.Now; router.LastBackupError = "";
             Progress?.Invoke(new(router.Id, "Backup", 1, 10, "Running", "Creating and downloading local backup"));
             string safeName = SafeName(router.Name);
             string idSuffix = router.Id.ToString("N")[..8];
@@ -44,7 +45,7 @@ public sealed class RouterBackupService(AppSettings settings, int? retentionDays
                 router.LastStatus = "Creating API backup";
                 Log(router, "Connecting to API");
                 await using RouterOsApiClient api = await RouterOsApiClient.ConnectAsync(router, _settings, cancellationToken);
-                router.ApiStatus = "Online";
+                router.ApiStatus = "Online"; router.LastSeenAt = DateTime.Now;
                 try
                 {
                     try
@@ -88,9 +89,11 @@ public sealed class RouterBackupService(AppSettings settings, int? retentionDays
                     await TryDeleteAsync(api, remoteExport, CancellationToken.None);
                 }
             }
+            catch (OperationCanceledException) { router.LastBackupError = "Cancelled"; Progress?.Invoke(new(router.Id, "Backup", 1, 0, "Cancelled", "Backup cancelled")); throw; }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 router.ApiStatus = "Failed";
+                router.LastBackupError = ex.Message;
                 router.LastStatus = "Backup failed: " + ex.Message;
                 result = "Failed: " + ex.Message;
                 failed++;

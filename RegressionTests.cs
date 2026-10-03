@@ -9,8 +9,34 @@ internal static class RegressionTests
         string directory = Path.Combine(Path.GetTempPath(), "MikroTikManager-tests-" + Guid.NewGuid().ToString("N"));
         var store = new SecureStore(directory);
         static void Check(bool value, string message) { if (!value) throw new Exception(message); }
+        // Fake device operations exercise dispatch without contacting a router.
+        var fleet = Enumerable.Range(0, 6).Select(i => new RouterRecord { Name = "Batch " + i }).ToList();
+        static RouterRunResult Result(RouterRecord r, string outcome = "Completed") => new(r.Id, r.Name, r.Host, outcome, 1, "", "", "fixture", DateTime.Now, DateTime.Now);
+        int activeCount = 0, peak = 0;
+        var parallel = await BatchUpgradeQueue.RunAsync(fleet, 2, 0, () => false, async r => {
+            int now = Interlocked.Increment(ref activeCount); int old; do { old = peak; } while (now > old && Interlocked.CompareExchange(ref peak, now, old) != old); await Task.Delay(10); Interlocked.Decrement(ref activeCount); return Result(r);
+        }, CancellationToken.None);
+        Check(parallel.Count == 6 && peak == 2 && activeCount == 0, "Parallel dispatcher enforces concurrency and waits for completion");
+        TaskCompletionSource<RouterRunResult> releaseA = new(), releaseB = new TaskCompletionSource<RouterRunResult>();
+        int dispatched = 0;
+        var limited = BatchUpgradeQueue.RunAsync(fleet, 2, 1, () => false, r => ++dispatched == 1 ? releaseA.Task : releaseB.Task, CancellationToken.None);
+        releaseA.SetResult(Result(fleet[0], "Failed"));
+        await Task.Delay(20);
+        Check(dispatched == 2 && !limited.IsCompleted, "Failure stops new starts while active router continues");
+        releaseB.SetResult(Result(fleet[1]));
+        Check((await limited).Count == 2, "Failure limit leaves unstarted routers pending");
+        bool paused = false; dispatched = 0;
+        await BatchUpgradeQueue.RunAsync(fleet, 1, 0, () => paused, r => { dispatched++; paused = true; return Task.FromResult(Result(r)); }, CancellationToken.None);
+        Check(dispatched == 1, "Pause blocks new starts");
+        var diff = ConfigDiff.Compare("# 2026-10-01 10:00:00 by RouterOS 7.24\n/interface\nadd name=a", "# 2026-10-03 11:00:00 by RouterOS 7.24\n/interface\nadd name=b");
+        Check(diff.Count(x => x.Kind == "+") == 1 && diff.Count(x => x.Kind == "−") == 1, "Diff ignores only export timestamps and retains configuration changes");
+        Check(!ConfigDiff.Display("password=secret", false).Contains("secret") && ConfigDiff.Display("password=secret", true).Contains("secret"), "Compare masks content unless explicitly revealed");
         // Construct every tab on the STA entry thread without showing the form or contacting routers.
-        using (var form = new MainForm()) { form.CreateControl(); Check(form.Text.Contains("0.4.1"), "Dashboard and menus construct on Windows"); }
+        // Run form construction on its own STA thread after async dispatcher tests.
+        Exception? uiFailure = null;
+        var uiThread = new Thread(() => { try { using var form = new MainForm(); form.CreateControl(); Check(form.Text.Contains("0.5.0"), "Dashboard and menus construct on Windows"); } catch (Exception ex) { uiFailure = ex; } });
+        uiThread.SetApartmentState(ApartmentState.STA); uiThread.Start(); uiThread.Join();
+        Check(uiFailure is null, "Windows workspace construction: " + uiFailure);
         var settings = new AppSettings { UpdateChannel = "long-term" };
         var channelRouter = new RouterRecord();
         Check(RouterChannels.Resolve(channelRouter, settings) == "long-term", "Default channel inherits settings");

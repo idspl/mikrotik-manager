@@ -5,6 +5,11 @@ public sealed class RouterRecord
     public Guid Id { get; set; } = Guid.NewGuid();
     public string Name { get; set; } = "";
     public string Group { get; set; } = "";
+    public string Site { get; set; } = "";
+    public string Tags { get; set; } = "";
+    public DateTime? LastSeenAt { get; set; }
+    public DateTime? LastBackupAttemptAt { get; set; }
+    public string LastBackupError { get; set; } = "";
     public string Host { get; set; } = "";
     public int ApiPort { get; set; } = 8728;
     public string Username { get; set; } = "";
@@ -48,6 +53,8 @@ public sealed class UpgradeJob
     public int RetentionDays { get; set; } = 30;
     public string LastRunResult { get; set; } = "";
     public bool LastRunSuccessful { get; set; }
+    public int MaxConcurrency { get; set; } = 1;
+    public int FailureLimit { get; set; }
 }
 
 public enum ScheduledJobKind { Upgrade, Backup }
@@ -105,7 +112,7 @@ public sealed record RouterHealthCheck(
     DateTime CheckedAt);
 
 public sealed record UpgradeRunOptions(FailureBehavior FailureBehavior, int RetryCount,
-    DateTime? WindowEnd = null, bool CanaryPerGroup = false);
+    DateTime? WindowEnd = null, bool CanaryPerGroup = false, int MaxConcurrency = 1, int FailureLimit = 0);
 public sealed record BackupHistoryEntry(DateTime CreatedAt, string BackupPath, string ExportPath,
     string BackupHash, string ExportHash, string Verification);
 public sealed record RouterRunResult(

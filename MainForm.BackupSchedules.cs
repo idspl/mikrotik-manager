@@ -76,6 +76,6 @@ public sealed partial class MainForm
         if (_operationInProgress || _updateInProgress) return;
         var selected = SelectedRouters(); if (selected.Count == 0) { MessageBox.Show("Select routers first."); return; }
         foreach (var router in selected) router.UpdateChannel = channel;
-        SaveRouters(); _routerGrid.Refresh(); RefreshDashboard();
+        SaveRouters(); RequestInventoryPaint(); RefreshDashboard();
     }
 }
