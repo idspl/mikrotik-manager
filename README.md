@@ -1,4 +1,4 @@
-# MikroTik Manager 0.3.0
+# MikroTik Manager 0.4.0
 
 [![Windows build](https://github.com/idspl/mikrotik-manager/actions/workflows/windows-build.yml/badge.svg)](https://github.com/idspl/mikrotik-manager/actions/workflows/windows-build.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -36,6 +36,17 @@ MikroTik Manager is currently distributed without a paid Authenticode certificat
 Do not run the file if it came from another website, the checksum differs, VirusTotal reports multiple credible detections, or the release cannot be matched to this repository. A single generic or heuristic detection can be a false positive; investigate it rather than assuming either safety or infection.
 
 Use a test router before production deployment. Router upgrades, reboots and sensitive configuration exports can interrupt services or expose credentials if operated without appropriate controls.
+
+## 0.4.0 scheduled backups, channels and dashboard
+
+- **Maintenance > Schedule Local Backups**: select routers first, then choose a one-time, daily or weekly schedule, a local fixed-drive folder and retention days (0 keeps all). Edit or disable a backup schedule on the Schedules tab. Editing also enables it again with a future date. Each schedule has its own subfolder and produces encrypted `.backup`, sensitive `.rsc` exports, hashes and a manifest containing backup passwords. Protect the destination folder accordingly.
+- Windows Task Scheduler runs as SYSTEM when the app is closed; the desktop runs due jobs when open and idle. Both identities need write access to the backup folder. Keep the EXE at its installed path and the PC powered on. No wake-from-sleep guarantee is provided. When the desktop catches up a missed run, it runs once and advances to the next future occurrence; it does not replay every missed day. Daily/weekly times use the PC's local timezone. A crash-interrupted job requires review and editing to re-enable it.
+- Retention removes old backup-run folders only after a fully successful replacement run, only inside that schedule's subfolder. Failed runs preserve previous copies. Disable prevents further backup execution; the Windows task registration remains and can be removed in Windows Task Scheduler if no longer needed.
+- **Edit Router > Upgrade channel** sets a router override. **Upgrade > Set Channel for Selected** applies it in bulk. Choose App default to inherit Settings. The inventory and upgrade preview show the choice; upgrades resolve that channel independently for each router. Changing the saved choice alone does not send a command to the router. No automatic downgrade or cross-major selection is introduced.
+- **Dashboard** is the new landing page: inventory/API counts, same-major RouterOS update counts by channel, backups older than seven days or never recorded, group summaries, upcoming schedules and last-run results. Counts are last-known observations, not continuous monitoring. Development-channel updates are excluded from website comparisons. Backup age reflects recorded successful downloads; use Backup History to check that files still exist and their hashes match.
+- Tables use consistent colours, readable column widths and horizontal scrolling. The schedule toolbar wraps on smaller windows. Grid selection and scrolling remain available during jobs.
+- **Skip Failed & Continue** continues only unstarted routers after a failure, in original queue order, with a fresh preview. It does not retry failed or interrupted routers. Backup progress cannot be retried as an upgrade.
+- Configuration exports now use schema version 2 to preserve backup schedules and router channels. This release imports legacy version 1 archives; older releases must not import version 2 archives. Imported schedules remain disabled until activated.
 
 ## 0.3.0 inventory freshness and maintenance controls
 
@@ -292,3 +303,4 @@ The `api` or `api-ssl` service must be enabled and reachable from this Windows c
 Bulk local download uses RouterOS `/file/read` in chunks. Routers running an older release without this command are marked failed; the app does not enable FTP or SSH as a fallback.
 
 For production, prefer a dedicated automation user and restrict both the service and firewall rule to the scheduler computer's management IP.
+

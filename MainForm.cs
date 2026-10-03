@@ -35,7 +35,8 @@ public sealed partial class MainForm : Form
     public MainForm()
     {
         _routerContextMenu = new ContextMenuStrip(_components);
-        Text = "MikroTik Manager 0.3.0";
+        Text = "MikroTik Manager 0.4.0";
+        Font = new Font("Segoe UI", 9F);
         Icon = AppIcon.Current;
         Width = 1280;
         Height = 720;
@@ -74,16 +75,26 @@ public sealed partial class MainForm : Form
     private void BuildUi()
     {
         var tabs = _tabs;
-        tabs.TabPages.Add(BuildRoutersPage());
+        _dashboardPage = BuildDashboardPage();
+        tabs.TabPages.Add(_dashboardPage);
+        _routerPage = BuildRoutersPage();
+        tabs.TabPages.Add(_routerPage);
         _maintenancePage = BuildMaintenancePage();
         tabs.TabPages.Add(_maintenancePage);
-        tabs.TabPages.Add(BuildSchedulesPage());
+        _schedulesPage = BuildSchedulesPage();
+        tabs.TabPages.Add(_schedulesPage);
         tabs.TabPages.Add(BuildLogsPage());
         tabs.TabPages.Add(BuildSettingsPage());
         var status = new StatusStrip();
         status.Items.Add(_status);
         Controls.Add(tabs);
         Controls.Add(status);
+        StyleGrid(_routerGrid); StyleGrid(_jobGrid); StyleGrid(_progressGrid);
+        tabs.SelectedIndexChanged += (_, _) => RefreshDashboard();
+        var dashboardTimer = new System.Windows.Forms.Timer(_components) { Interval = 5000 };
+        dashboardTimer.Tick += (_, _) => { if (_tabs.SelectedTab == _dashboardPage) RefreshDashboard(); };
+        dashboardTimer.Start();
+        RefreshDashboard();
     }
 
     private TabPage BuildRoutersPage()
@@ -136,9 +147,15 @@ public sealed partial class MainForm : Form
         maintenanceMenu.DropDownItems.Add(new ToolStripSeparator());
         maintenanceMenu.DropDownItems.Add("Backup Selected Routers...", null, BackupSelectedRouters);
         maintenanceMenu.DropDownItems.Add("Backup History...", null, ShowBackupHistory);
+        maintenanceMenu.DropDownItems.Add("Schedule Local Backups...", null, CreateBackupSchedule);
 
         var upgradeMenu = new ToolStripDropDownButton("Upgrade");
         upgradeMenu.DropDownItems.Add("Upgrade Selected Routers...", null, RunNow);
+        var channels = new ToolStripMenuItem("Set Channel for Selected");
+        channels.DropDownItems.Add("App default", null, (_, _) => SetSelectedChannel(""));
+        foreach (string channel in RouterChannels.Allowed)
+            channels.DropDownItems.Add(channel, null, (_, _) => SetSelectedChannel(channel));
+        upgradeMenu.DropDownItems.Add(channels);
         upgradeMenu.DropDownItems.Add("Resume Incomplete Queue", null, ResumeIncomplete);
         upgradeMenu.DropDownItems.Add("Pause After Current Router", null, PauseAfterRouter);
         upgradeMenu.DropDownItems.Add("Maintenance History", null, ShowHistory);
@@ -148,8 +165,8 @@ public sealed partial class MainForm : Form
         var updatesMenu = new ToolStripDropDownButton("Help") { Alignment = ToolStripItemAlignment.Right };
         updatesMenu.DropDownItems.Add("Check for Updates", null, async (_, _) => await CheckForUpdatesAsync(true));
         updatesMenu.DropDownItems.Add(new ToolStripSeparator());
-        updatesMenu.DropDownItems.Add("About MikroTik Manager 0.3.0", null, (_, _) =>
-            MessageBox.Show("MikroTik Manager 0.3.0\n\nMade for MikroTik\nIndependent open-source software by Indigo Data Services Pvt Ltd.", Text,
+        updatesMenu.DropDownItems.Add("About MikroTik Manager 0.4.0", null, (_, _) =>
+            MessageBox.Show("MikroTik Manager 0.4.0\n\nMade for MikroTik\nIndependent open-source software by Indigo Data Services Pvt Ltd.", Text,
                 MessageBoxButtons.OK, MessageBoxIcon.Information));
         actions.Items.AddRange([inventoryMenu, selectionMenu, groupMenu, maintenanceMenu, upgradeMenu, updatesMenu]);
 
@@ -195,7 +212,7 @@ public sealed partial class MainForm : Form
         _routerGrid.AllowDrop = true;
         _routerGrid.DragEnter += MainFormDragEnter;
         _routerGrid.DragDrop += MainFormDragDrop;
-        _routerGrid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
+        _routerGrid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.None;
         _routerGrid.BorderStyle = BorderStyle.None;
         _routerGrid.BackgroundColor = Color.White;
         _routerGrid.GridColor = Color.FromArgb(225, 229, 235);
@@ -216,6 +233,7 @@ public sealed partial class MainForm : Form
         _routerGrid.Columns.Add(TextColumn(nameof(RouterRecord.ApiPort), "API Port", 72));
         _routerGrid.Columns.Add(TextColumn(nameof(RouterRecord.Username), "Username", 85));
         _routerGrid.Columns.Add(TextColumn(nameof(RouterRecord.ApiStatus), "API Status", 120, true));
+        _routerGrid.Columns.Add(TextColumn(nameof(RouterRecord.ChannelLabel), "Upgrade channel", 110, true));
         _routerGrid.Columns.Add(TextColumn(nameof(RouterRecord.RouterOsVersion), "RouterOS", 85, true));
         _routerGrid.Columns.Add(TextColumn(nameof(RouterRecord.FirmwareVersion), "Firmware", 85, true));
         _routerGrid.Columns.Add(TextColumn(nameof(RouterRecord.LastCheckedAt), "Versions checked", 125, true));
@@ -285,23 +303,31 @@ public sealed partial class MainForm : Form
     private TabPage BuildSchedulesPage()
     {
         var page = new TabPage("Schedules");
-        var bar = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 90, Padding = new Padding(8), WrapContents = true, AutoScroll = true };
+        var bar = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, Padding = new Padding(8), WrapContents = true };
         _scheduleTime.Value = DateTime.Now.AddHours(1);
         bar.Controls.Add(new Label { Text = "Job:", AutoSize = true, Padding = new Padding(0, 7, 0, 0) });
         bar.Controls.Add(_jobName);
         bar.Controls.Add(new Label { Text = "Run at:", AutoSize = true, Padding = new Padding(8, 7, 0, 0) });
         bar.Controls.Add(_scheduleTime);
-        bar.Controls.Add(Button("Schedule Selected Routers", CreateSchedule));
+        bar.Controls.Add(Button("Schedule Upgrade", CreateSchedule));
         bar.Controls.Add(_scheduleWindow); bar.Controls.Add(_scheduleEnd);
         bar.Controls.Add(Button("Activate Imported Schedule", ActivateImportedSchedule));
+        bar.Controls.Add(Button("Schedule Local Backups", CreateBackupSchedule));
+        bar.Controls.Add(Button("Edit Backup Schedule", EditBackupSchedule));
+        bar.Controls.Add(Button("Disable Backup Schedule", DisableBackupSchedule));
         _jobGrid.Dock = DockStyle.Fill;
         _jobGrid.ReadOnly = true;
         _jobGrid.AllowUserToAddRows = false;
         _jobGrid.AllowUserToDeleteRows = false;
         _jobGrid.AutoGenerateColumns = false;
-        _jobGrid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
+        _jobGrid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.None;
+        _jobGrid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
+        _jobGrid.MultiSelect = false;
         _jobGrid.Columns.Add(TextColumn(nameof(UpgradeJob.Name), "Job", 180, true));
-        _jobGrid.Columns.Add(TextColumn(nameof(UpgradeJob.ScheduledLocalTime), "Scheduled", 120, true));
+        _jobGrid.Columns.Add(TextColumn(nameof(UpgradeJob.Kind), "Type", 80, true));
+        _jobGrid.Columns.Add(TextColumn(nameof(UpgradeJob.Recurrence), "Repeat", 80, true));
+        _jobGrid.Columns.Add(TextColumn(nameof(UpgradeJob.ScheduledLocalTime), "Next / planned run", 150, true));
+        _jobGrid.Columns.Add(TextColumn(nameof(UpgradeJob.LastRunResult), "Last result", 260, true));
         _jobGrid.Columns.Add(TextColumn(nameof(UpgradeJob.RouterCount), "Routers", 60, true));
         _jobGrid.Columns.Add(TextColumn(nameof(UpgradeJob.State), "State", 220, true));
         _jobGrid.Columns.Add(TextColumn(nameof(UpgradeJob.WindowEnd), "Cutoff", 120, true));
@@ -932,9 +958,9 @@ public sealed partial class MainForm : Form
     private async void RetryFailed(object? sender, EventArgs e)
     {
         if (_operationInProgress) return;
-        HashSet<Guid> ids = _progressRows.Where(x => x.Result == "Failed").Select(x => x.RouterId).ToHashSet();
+        HashSet<Guid> ids = _progressRows.Where(x => x.Result == "Failed" && _lastUpgradeRouterIds.Contains(x.RouterId)).Select(x => x.RouterId).ToHashSet();
         List<RouterRecord> routers = _routers.Where(x => ids.Contains(x.Id)).ToList();
-        if (routers.Count == 0) { MessageBox.Show("There are no failed routers to retry."); return; }
+        if (routers.Count == 0) { MessageBox.Show("There are no failed upgrades to retry. To retry a backup, select its routers and use Backup Selected Routers."); return; }
         await RunUpgradeAsync(routers, (FailureBehavior)(_failureBehavior.SelectedItem ?? FailureBehavior.RetryThenSkip), (int)_retryCount.Value);
     }
 
@@ -957,7 +983,7 @@ public sealed partial class MainForm : Form
         var job = new UpgradeJob
         {
             Name = string.IsNullOrWhiteSpace(_jobName.Text) ? $"Maintenance {_scheduleTime.Value:dd-MM-yyyy HH:mm}" : _jobName.Text.Trim(),
-            ScheduledLocalTime = _scheduleTime.Value,
+            ScheduledLocalTime = BackupSchedulePolicy.Minute(_scheduleTime.Value),
             WindowEnd = _scheduleWindow.Checked ? _scheduleEnd.Value : null,
             RouterIds = selected.Select(x => x.Id).ToList(),
             FailureBehavior = (FailureBehavior)(_failureBehavior.SelectedItem ?? FailureBehavior.RetryThenSkip),
@@ -968,6 +994,7 @@ public sealed partial class MainForm : Form
             SetBusy(true, "Registering schedule...");
             _jobs.Add(job); _store.SaveJobs(_jobs.ToList());
             await TaskSchedulerService.RegisterAsync(job);
+            _store.SaveJobs(_jobs.ToList());
             _jobGrid.Refresh();
             MessageBox.Show("Schedule created. Windows may request administrator approval so the task can run while nobody is logged in.", Text, MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
@@ -1033,6 +1060,7 @@ public sealed partial class MainForm : Form
 
     private static string RouterGridStatus(MaintenanceProgressUpdate update)
     {
+        if (update.Stage == "Backup") return update.Result == "Completed" ? "Local backup completed" : update.Result == "Failed" ? "Backup failed: " + update.Message : "Backing up locally";
         if (update.Result == "Completed") return update.Message.StartsWith("Already current") ? "Already current; verified" : "Completed: upgraded successfully";
         if (update.Result == "Failed") return "Failed: " + update.Message;
         if (update.Result == "Cancelled") return "Cancelled";
@@ -1171,6 +1199,7 @@ public sealed partial class MainForm : Form
             Width = 120
         };
     }
-    private static DataGridViewTextBoxColumn TextColumn(string property, string header, float weight, bool readOnly = false) => new() { DataPropertyName = property, HeaderText = header, FillWeight = weight, ReadOnly = readOnly, SortMode = DataGridViewColumnSortMode.Automatic };
+    private static DataGridViewTextBoxColumn TextColumn(string property, string header, float weight, bool readOnly = false) => new() { DataPropertyName = property, HeaderText = header, Width = (int)weight, MinimumWidth = 55, FillWeight = weight, ReadOnly = readOnly, SortMode = DataGridViewColumnSortMode.Automatic };
     private static void AddRow(TableLayoutPanel panel, string label, Control control) { int row = panel.RowCount++; panel.RowStyles.Add(new RowStyle(SizeType.AutoSize)); panel.Controls.Add(new Label { Text = label, AutoSize = true, Padding = new Padding(0, 8, 0, 8) }, 0, row); panel.Controls.Add(control, 1, row); }
 }
+

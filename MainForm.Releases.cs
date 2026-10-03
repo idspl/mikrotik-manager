@@ -9,6 +9,7 @@ public sealed partial class MainForm
     private readonly ToolStripLabel _latestTesting = new("Latest Testing: —");
     private readonly ToolStripLabel _releaseChecked = new("Not checked") { ForeColor = Color.DimGray };
     private readonly ToolStripButton _refreshReleases = new("Refresh");
+    private RouterOsReleases? _publishedReleases;
     private bool _refreshingReleases;
     private DateTime? _releaseCheckedAt;
 
@@ -40,6 +41,7 @@ public sealed partial class MainForm
         {
             RouterOsReleases releases = await RouterOsReleases.FetchAsync();
             if (IsDisposed || Disposing) return;
+            _publishedReleases = releases;
             _latestStable.Text = "Latest Stable: " + releases.Stable;
             _latestLongTerm.Text = "Latest Long-term: " + releases.LongTerm;
             _latestTesting.Text = "Latest Testing: " + releases.Testing;
@@ -54,7 +56,8 @@ public sealed partial class MainForm
         finally
         {
             _refreshingReleases = false;
-            if (!IsDisposed && !Disposing) _refreshReleases.Enabled = true;
+            if (!IsDisposed && !Disposing) { _refreshReleases.Enabled = true; RefreshDashboard(); }
         }
     }
 }
+

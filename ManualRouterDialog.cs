@@ -12,6 +12,7 @@ public sealed class ManualRouterDialog : Form
     private readonly RouterRecord? _existing;
     private readonly TextBox _interfaces = new() { Width = 280, PlaceholderText = "Optional: ether1, bridge-lan" };
     private readonly CheckBox _emptyPassword = new() { Text = "Use empty password", AutoSize = true };
+    private readonly ComboBox _channel = new() { Width = 220, DropDownStyle = ComboBoxStyle.DropDownList };
 
     public ManualRouterDialog(int defaultApiPort, RouterRecord? existing = null)
     {
@@ -19,19 +20,22 @@ public sealed class ManualRouterDialog : Form
         Icon = AppIcon.Current;
         Text = "Add Router Manually";
         Width = 570;
-        Height = 480;
+        Height = 535;
         StartPosition = FormStartPosition.CenterParent;
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = false;
         MinimizeBox = false;
         _apiPort.Value = Math.Clamp(defaultApiPort, 1, 65535);
         _username.Text = "admin";
+        _channel.Items.Add("App default"); _channel.Items.AddRange(RouterChannels.Allowed);
+        _channel.SelectedIndex = 0;
         if (existing is not null)
         {
             Text = "Edit Router";
             _name.Text = existing.Name; _group.Text = existing.Group; _address.Text = existing.Host;
             _apiPort.Value = existing.ApiPort; _username.Text = existing.Username;
             _interfaces.Text = existing.CriticalInterfaces;
+            _channel.SelectedItem = string.IsNullOrEmpty(existing.UpdateChannel) ? "App default" : existing.UpdateChannel;
             _password.PlaceholderText = "Blank keeps saved password";
         }
 
@@ -54,7 +58,8 @@ public sealed class ManualRouterDialog : Form
         };
         AddRow(table, 6, "Critical interfaces (comma separated)", _interfaces);
         table.Controls.Add(_emptyPassword, 1, 7);
-        table.Controls.Add(note, 1, 8);
+        AddRow(table, 8, "Upgrade channel", _channel);
+        table.Controls.Add(note, 1, 9);
 
         var add = new Button { Text = existing is null ? "Add Router" : "Save Router", AutoSize = true };
         add.Click += (_, _) => AcceptRouter();
@@ -62,7 +67,7 @@ public sealed class ManualRouterDialog : Form
         var buttons = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.RightToLeft, Dock = DockStyle.Fill };
         buttons.Controls.Add(cancel);
         buttons.Controls.Add(add);
-        table.Controls.Add(buttons, 1, 9);
+        table.Controls.Add(buttons, 1, 10);
         Controls.Add(table);
         AcceptButton = add;
         CancelButton = cancel;
@@ -85,6 +90,7 @@ public sealed class ManualRouterDialog : Form
                 Username = _username.Text.Trim(),
                 Password = password,
                 CriticalInterfaces = _interfaces.Text.Trim(),
+                UpdateChannel = _channel.SelectedIndex <= 0 ? "" : _channel.SelectedItem!.ToString()!,
                 BackupPassword = string.IsNullOrEmpty(password)
                     ? Convert.ToHexString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(18))
                     : password

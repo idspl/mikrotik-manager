@@ -4,15 +4,15 @@ using System.Text;
 
 namespace MikroTikManager;
 
-public sealed class RouterBackupService(AppSettings settings)
+public sealed class RouterBackupService(AppSettings settings, int? retentionDays = null)
 {
     private readonly AppSettings _settings = settings;
     public event Action<string>? Message;
+    public event Action<MaintenanceProgressUpdate>? Progress;
 
     public async Task<BulkBackupResult> BackupAllAsync(IReadOnlyList<RouterRecord> routers, string parentFolder, CancellationToken cancellationToken)
     {
         string stamp = DateTime.Now.ToString("yyyy-MM-dd_HHmmss", CultureInfo.InvariantCulture);
-        CleanupExpiredBackups(parentFolder);
         string outputFolder = Path.Combine(parentFolder, "MikroTik-Manager-Backups_" + stamp);
         Directory.CreateDirectory(outputFolder);
         string manifestPath = Path.Combine(outputFolder, "BackupManifest.csv");
@@ -22,6 +22,7 @@ public sealed class RouterBackupService(AppSettings settings)
         foreach (RouterRecord router in routers)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            Progress?.Invoke(new(router.Id, "Backup", 1, 10, "Running", "Creating and downloading local backup"));
             string safeName = SafeName(router.Name);
             string idSuffix = router.Id.ToString("N")[..8];
             string localStem = $"{safeName}_{SafeName(router.Host)}_{router.ApiPort}_{stamp}_{idSuffix}";
@@ -103,7 +104,10 @@ public sealed class RouterBackupService(AppSettings settings)
                 Csv(Path.GetFileName(localExport)), exportBytes.ToString(CultureInfo.InvariantCulture), Csv(exportHash),
                 Csv(router.BackupPassword), Csv(verification), Csv(result)) + "\r\n";
             await File.AppendAllTextAsync(manifestPath, row, Encoding.UTF8, cancellationToken);
+            Progress?.Invoke(new(router.Id, "Backup", 1, 100, result == "Success" ? "Completed" : "Failed", result));
         }
+        // Do not delete earlier recovery copies when the replacement run failed.
+        if (failed == 0 && successful > 0) await Task.Run(() => CleanupExpiredBackups(parentFolder));
         return new BulkBackupResult(successful, failed, outputFolder, verified);
     }
 
@@ -118,7 +122,7 @@ public sealed class RouterBackupService(AppSettings settings)
 
     private void CleanupExpiredBackups(string parentFolder)
     {
-        int days = _settings.BackupRetentionDays;
+        int days = retentionDays ?? _settings.BackupRetentionDays;
         if (days <= 0 || !Directory.Exists(parentFolder)) return;
         DateTime cutoff = DateTime.Now.AddDays(-days);
         foreach (string folder in Directory.EnumerateDirectories(parentFolder, "MikroTik-Manager-Backups_*", SearchOption.TopDirectoryOnly))

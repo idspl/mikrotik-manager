@@ -57,7 +57,7 @@ public sealed partial class MainForm
 
     private async Task RunScheduledInUiAsync(UpgradeJob job)
     {
-        SetBusy(true, "Scheduled maintenance: " + job.Name);
+        SetBusy(true, "Scheduled " + job.Kind + ": " + job.Name);
         _running = new CancellationTokenSource();
         var selected = job.RouterIds.Select(id => _routers.FirstOrDefault(r => r.Id == id)).OfType<RouterRecord>().ToList();
         job.State = "Running"; job.StartedAt = DateTime.Now;
@@ -65,22 +65,34 @@ public sealed partial class MainForm
         {
             SaveAll();
             if (selected.Count != job.RouterIds.Count || selected.Count == 0) throw new InvalidOperationException("Scheduled routers are missing or empty.");
-            _lastUpgradeRouterIds = selected.Select(x => x.Id).ToList();
+            _lastUpgradeRouterIds = job.Kind == ScheduledJobKind.Upgrade ? selected.Select(x => x.Id).ToList() : [];
             PrepareProgressRows(selected); _tabs.SelectedTab = _maintenancePage;
+            if (job.Kind == ScheduledJobKind.Backup)
+            {
+                var backup = await ScheduledBackupRunner.RunAsync(_store, _store.LoadSettings(), job, selected, AppendLog,
+                    update => UpdateProgress(update), _running.Token);
+                job.State = backup.Failed == 0 ? "Completed" : $"Backup failed: {backup.Failed} routers";
+                job.LastRunResult = $"Backup: {backup.Successful} successful, {backup.Failed} failed; {backup.Folder}";
+            }
+            else
+            {
             var engine = CreateEngine(); _activeUpgrade = engine;
             var result = await Task.Run(() => engine.RunSequentialAsync(selected,
                 new UpgradeRunOptions(job.FailureBehavior, job.RetryCount, job.WindowEnd), _running.Token));
             await new MaintenanceReportService(_store).WriteAsync(result);
             job.State = result.Failed == 0 && result.Routers.Count == selected.Count ? "Completed"
                 : $"Finished: {result.Failed} failed; {selected.Count - result.Routers.Count} not processed";
+            }
         }
         catch (OperationCanceledException) { job.State = "Cancelled"; }
         catch (Exception ex) { job.State = "Failed: " + ex.Message; }
         finally
         {
-            job.CompletedAt = DateTime.Now; _activeUpgrade = null;
+            bool success = job.State == "Completed";
+            string result = success && job.Kind == ScheduledJobKind.Backup ? job.LastRunResult : job.State;
+            BackupSchedulePolicy.Finish(job, success, result, DateTime.Now); _activeUpgrade = null;
             try { SaveAll(); } catch (Exception ex) { ShowError(ex); }
-            _running.Dispose(); _running = null; SetBusy(false, job.Name + ": " + job.State);
+            _running.Dispose(); _running = null; SetBusy(false, job.Name + ": " + job.LastRunResult);
             _jobGrid.Refresh(); _routerGrid.Refresh();
         }
     }
@@ -88,6 +100,7 @@ public sealed partial class MainForm
     private async void ActivateImportedSchedule(object? sender, EventArgs e)
     {
         if (_operationInProgress || _jobGrid.CurrentRow?.DataBoundItem is not UpgradeJob job) return;
+        if (job.Kind == ScheduledJobKind.Backup) { await ConfigureBackupScheduleAsync(job); return; }
         if (job.State != "Imported — disabled") { MessageBox.Show("Select an imported disabled schedule. Set its Run at date above before activating."); return; }
         if (_scheduleTime.Value <= DateTime.Now.AddMinutes(1)) { MessageBox.Show("Choose a future Run at time."); return; }
         if (_scheduleWindow.Checked && _scheduleEnd.Value <= _scheduleTime.Value) { MessageBox.Show("Cutoff must be after Run at."); return; }

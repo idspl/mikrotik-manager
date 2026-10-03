@@ -196,7 +196,7 @@ public sealed class UpgradeEngine(SecureStore store, AppSettings settings)
             const int maximumPackagePasses = 4;
             for (int pass = 1; pass <= maximumPackagePasses; pass++)
             {
-                await api.ExecuteAsync("/system/package/update/set", ct, $"channel={_settings.UpdateChannel}");
+                await api.ExecuteAsync("/system/package/update/set", ct, $"channel={RouterChannels.Resolve(router, _settings)}");
                 await api.ExecuteAsync("/system/package/update/check-for-updates", ct);
                 IReadOnlyDictionary<string, string> update = await ReadOneAsync(api, "/system/package/update/print", ct);
                 string current = update.GetValueOrDefault("installed-version") ?? (await GetSnapshotAsync(api, ct)).RouterOsVersion;

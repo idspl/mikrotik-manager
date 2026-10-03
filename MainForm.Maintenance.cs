@@ -135,7 +135,7 @@ public sealed partial class MainForm
         try
         {
             var rows = new System.Data.DataTable();
-            foreach (string column in new[] { "Order", "Router", "Group", "Address", "RouterOS", "Firmware", "Available firmware", "Ready", "Storage", "Detail" })
+            foreach (string column in new[] { "Order", "Router", "Group", "Address", "Channel", "RouterOS", "Firmware", "Available firmware", "Ready", "Storage", "Detail" })
                 rows.Columns.Add(column);
             var engine = new UpgradeEngine(_store, _store.LoadSettings());
             int order = 0;
@@ -143,12 +143,13 @@ public sealed partial class MainForm
             {
                 RouterHealthCheck health = await engine.PreflightAsync(router, _running.Token);
                 rows.Rows.Add(++order, router.Name, router.Group, router.Host,
+                    RouterChannels.Resolve(router, _store.LoadSettings()),
                     health.Snapshot?.RouterOsVersion ?? "Unknown", health.Snapshot?.CurrentFirmware ?? "Unknown",
                     health.Snapshot?.UpgradeFirmware ?? "Not applicable", health.Passed, router.StorageStatus, health.Summary);
             }
             using var dialog = new Form { Text = "Upgrade Preview — confirm exact queue order", Width = 1100, Height = 550, StartPosition = FormStartPosition.CenterParent };
             var info = new Label { Dock = DockStyle.Top, Height = 100, Padding = new Padding(10), Text =
-                $"Channel: {_store.LoadSettings().UpdateChannel} | Failure policy: {FriendlyBehavior(behavior)} | Retries: {retries}\n" +
+                $"Channels: see each router row | Failure policy: {FriendlyBehavior(behavior)} | Retries: {retries}\n" +
                 "RouterOS target is resolved by the router at execution time; it is not pinned by this preview.\n" +
                 "Safety backups are created ON EACH ROUTER (preupgrade-*). Use Backup Selected first for local copies.\n" +
                 "Routers run in the order shown, not automatically sorted by group. Failed readiness checks block that router at execution." };

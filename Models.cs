@@ -23,6 +23,8 @@ public sealed class RouterRecord
     public DateTime? LastApiCheckAt { get; set; }
     public string AvailableFirmware { get; set; } = "";
     public string CriticalInterfaces { get; set; } = "";
+    public string UpdateChannel { get; set; } = "";
+    public string ChannelLabel => string.IsNullOrEmpty(UpdateChannel) ? "App default" : UpdateChannel;
     public List<BackupHistoryEntry> Backups { get; set; } = [];
     public DateTime? LastBackupAt => Backups.LastOrDefault()?.CreatedAt;
 }
@@ -40,6 +42,26 @@ public sealed class UpgradeJob
     public FailureBehavior FailureBehavior { get; set; } = FailureBehavior.Stop;
     public int RetryCount { get; set; } = 1;
     public DateTime? WindowEnd { get; set; }
+    public ScheduledJobKind Kind { get; set; } = ScheduledJobKind.Upgrade;
+    public BackupRecurrence Recurrence { get; set; } = BackupRecurrence.Once;
+    public string BackupFolder { get; set; } = "";
+    public int RetentionDays { get; set; } = 30;
+    public string LastRunResult { get; set; } = "";
+    public bool LastRunSuccessful { get; set; }
+}
+
+public enum ScheduledJobKind { Upgrade, Backup }
+public enum BackupRecurrence { Once, Daily, Weekly }
+
+public static class RouterChannels
+{
+    public static readonly string[] Allowed = ["stable", "long-term", "testing", "development"];
+    public static string Resolve(RouterRecord router, AppSettings settings)
+    {
+        string channel = string.IsNullOrWhiteSpace(router.UpdateChannel) ? settings.UpdateChannel : router.UpdateChannel;
+        if (!Allowed.Contains(channel)) throw new InvalidOperationException("Invalid upgrade channel for " + router.Name);
+        return channel;
+    }
 }
 
 public enum FailureBehavior
