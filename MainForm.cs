@@ -35,7 +35,7 @@ public sealed partial class MainForm : Form
     public MainForm()
     {
         _routerContextMenu = new ContextMenuStrip(_components);
-        Text = "MikroTik Manager 0.4.0";
+        Text = "MikroTik Manager 0.4.1";
         Font = new Font("Segoe UI", 9F);
         Icon = AppIcon.Current;
         Width = 1280;
@@ -165,8 +165,8 @@ public sealed partial class MainForm : Form
         var updatesMenu = new ToolStripDropDownButton("Help") { Alignment = ToolStripItemAlignment.Right };
         updatesMenu.DropDownItems.Add("Check for Updates", null, async (_, _) => await CheckForUpdatesAsync(true));
         updatesMenu.DropDownItems.Add(new ToolStripSeparator());
-        updatesMenu.DropDownItems.Add("About MikroTik Manager 0.4.0", null, (_, _) =>
-            MessageBox.Show("MikroTik Manager 0.4.0\n\nMade for MikroTik\nIndependent open-source software by Indigo Data Services Pvt Ltd.", Text,
+        updatesMenu.DropDownItems.Add("About MikroTik Manager 0.4.1", null, (_, _) =>
+            MessageBox.Show("MikroTik Manager 0.4.1\n\nMade for MikroTik\nIndependent open-source software by Indigo Data Services Pvt Ltd.", Text,
                 MessageBoxButtons.OK, MessageBoxIcon.Information));
         actions.Items.AddRange([inventoryMenu, selectionMenu, groupMenu, maintenanceMenu, upgradeMenu, updatesMenu]);
 
@@ -315,6 +315,8 @@ public sealed partial class MainForm : Form
         bar.Controls.Add(Button("Schedule Local Backups", CreateBackupSchedule));
         bar.Controls.Add(Button("Edit Backup Schedule", EditBackupSchedule));
         bar.Controls.Add(Button("Disable Backup Schedule", DisableBackupSchedule));
+        bar.Controls.Add(Button("Run Job Now…", RunJobNow));
+        bar.Controls.Add(Button("Delete Job / Schedule…", DeleteSchedule));
         _jobGrid.Dock = DockStyle.Fill;
         _jobGrid.ReadOnly = true;
         _jobGrid.AllowUserToAddRows = false;
@@ -334,6 +336,7 @@ public sealed partial class MainForm : Form
         _jobGrid.Columns.Add(TextColumn(nameof(UpgradeJob.StartedAt), "Started", 120, true));
         _jobGrid.Columns.Add(TextColumn(nameof(UpgradeJob.CompletedAt), "Completed", 120, true));
         _jobGrid.DataSource = _jobs;
+        BuildScheduleContextMenu();
         page.Controls.Add(_jobGrid);
         page.Controls.Add(bar);
         return page;

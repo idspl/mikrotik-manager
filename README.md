@@ -1,4 +1,4 @@
-# MikroTik Manager 0.4.0
+# MikroTik Manager 0.4.1
 
 [![Windows build](https://github.com/idspl/mikrotik-manager/actions/workflows/windows-build.yml/badge.svg)](https://github.com/idspl/mikrotik-manager/actions/workflows/windows-build.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -36,6 +36,11 @@ MikroTik Manager is currently distributed without a paid Authenticode certificat
 Do not run the file if it came from another website, the checksum differs, VirusTotal reports multiple credible detections, or the release cannot be matched to this repository. A single generic or heuristic detection can be a false positive; investigate it rather than assuming either safety or infection.
 
 Use a test router before production deployment. Router upgrades, reboots and sensitive configuration exports can interrupt services or expose credentials if operated without appropriate controls.
+
+## 0.4.1 schedule actions
+
+- **Schedules > Run Job Now** (also right-click): run the selected backup or upgrade immediately after confirmation, then follow Maintenance Progress. A successful one-time job becomes Completed. A recurring backup keeps its future due time; an overdue run advances to the next occurrence. Running a disabled/imported recurring backup does not enable it. Manual upgrade runs explicitly ignore the saved cutoff, as stated in the confirmation.
+- **Schedules > Delete Job / Schedule** (also right-click): remove the job and its exact Windows scheduled task. Windows may request administrator approval. Cancellation or task-removal failure retains the job. Backup files, routers and maintenance history are preserved. Running jobs cannot be deleted; other operations must finish first.
 
 ## 0.4.0 scheduled backups, channels and dashboard
 

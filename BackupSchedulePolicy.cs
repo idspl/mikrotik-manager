@@ -19,11 +19,15 @@ internal static class BackupSchedulePolicy
 
     internal static string JobFolder(UpgradeJob job) => Path.Combine(job.BackupFolder, "Schedule-" + job.Id.ToString("N"));
 
-    internal static void Finish(UpgradeJob job, bool success, string result, DateTime now)
+    internal static void Finish(UpgradeJob job, bool success, string result, DateTime now, string? manualPreviousState = null)
     {
         job.CompletedAt = now; job.LastRunResult = result; job.LastRunSuccessful = success;
         if (job.Kind != ScheduledJobKind.Backup || job.Recurrence == BackupRecurrence.Once)
         { job.State = success ? "Completed" : result; return; }
+        if (manualPreviousState is not null && manualPreviousState != "Scheduled")
+        { job.State = manualPreviousState; return; }
+        if (manualPreviousState is not null && job.ScheduledLocalTime > now)
+        { job.State = "Scheduled"; return; }
         int days = job.Recurrence == BackupRecurrence.Daily ? 1 : 7;
         DateTime next = job.ScheduledLocalTime;
         // Retain the original local time and weekday, skip missed occurrences.

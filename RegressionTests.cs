@@ -10,7 +10,7 @@ internal static class RegressionTests
         var store = new SecureStore(directory);
         static void Check(bool value, string message) { if (!value) throw new Exception(message); }
         // Construct every tab on the STA entry thread without showing the form or contacting routers.
-        using (var form = new MainForm()) { form.CreateControl(); Check(form.Text.Contains("0.4.0"), "Dashboard and menus construct on Windows"); }
+        using (var form = new MainForm()) { form.CreateControl(); Check(form.Text.Contains("0.4.1"), "Dashboard and menus construct on Windows"); }
         var settings = new AppSettings { UpdateChannel = "long-term" };
         var channelRouter = new RouterRecord();
         Check(RouterChannels.Resolve(channelRouter, settings) == "long-term", "Default channel inherits settings");
@@ -30,6 +30,18 @@ internal static class RegressionTests
         var once = new UpgradeJob { Kind = ScheduledJobKind.Backup, ScheduledLocalTime = due };
         BackupSchedulePolicy.Finish(once, true, "Done", due.AddMinutes(2));
         Check(once.State == "Completed" && once.ScheduledLocalTime == due, "One-time backup never repeats");
+        var manual = new UpgradeJob { Kind = ScheduledJobKind.Backup, Recurrence = BackupRecurrence.Daily, ScheduledLocalTime = due.AddDays(1) };
+        BackupSchedulePolicy.Finish(manual, true, "Manual backup done", due, "Scheduled");
+        Check(manual.State == "Scheduled" && manual.ScheduledLocalTime == due.AddDays(1), "Run Now preserves a future recurring backup");
+        BackupSchedulePolicy.Finish(manual, false, "Manual backup failed", due, "Disabled");
+        Check(manual.State == "Disabled" && !manual.LastRunSuccessful && manual.ScheduledLocalTime == due.AddDays(1), "Manual backup cannot enable a disabled schedule");
+        BackupSchedulePolicy.Finish(manual, true, "Manual backup done", due.AddDays(3), "Imported — disabled");
+        Check(manual.State == "Imported — disabled" && manual.ScheduledLocalTime == due.AddDays(1), "Manual imported backup remains disabled even when overdue");
+        BackupSchedulePolicy.Finish(manual, true, "Manual backup done", due.AddDays(3), "Scheduled");
+        Check(manual.State == "Scheduled" && manual.ScheduledLocalTime == due.AddDays(4), "Run Now consumes an overdue recurring occurrence once");
+        var manualUpgrade = new UpgradeJob { ScheduledLocalTime = due.AddDays(1) };
+        BackupSchedulePolicy.Finish(manualUpgrade, true, "Upgrade done", due, "Scheduled");
+        Check(manualUpgrade.State == "Completed", "Run Now consumes a one-time upgrade instead of replaying later");
         Check(BackupSchedulePolicy.JobFolder(daily) != BackupSchedulePolicy.JobFolder(weekly), "Retention directories isolated per schedule");
         bool recurringUpgrade = false;
         try { BackupSchedulePolicy.Validate(new UpgradeJob { Recurrence = BackupRecurrence.Daily }); } catch (ArgumentException) { recurringUpgrade = true; }
