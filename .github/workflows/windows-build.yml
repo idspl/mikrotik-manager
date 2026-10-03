@@ -23,17 +23,20 @@ jobs:
       - name: Publish standalone Windows application
         run: dotnet publish MikroTikManager.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=None -p:DebugSymbols=false -o release/win-x64
       - name: Run isolated Windows regression checks
+        timeout-minutes: 5
         shell: pwsh
         run: |
           $test = Start-Process -FilePath "release/win-x64/MikroTikManager.exe" -ArgumentList "--self-test" -Wait -PassThru
           if ($test.ExitCode -ne 0) {
+            if (Test-Path ui-layout-check.log) { Get-Content ui-layout-check.log }
             if (Test-Path self-test-failure.log) { Get-Content self-test-failure.log }
             throw "Regression tests failed: $($test.ExitCode)"
           }
       - name: Capture workspace previews
+        if: always()
         shell: pwsh
         run: |
-          Get-ChildItem ui-*.base64 | ForEach-Object { Write-Output "UI_PREVIEW:$($_.Name):$(Get-Content $_ -Raw)" }
+          Get-ChildItem ui-150-*.base64 -ErrorAction SilentlyContinue | ForEach-Object { Write-Output "UI_PREVIEW:$($_.Name):$(Get-Content $_ -Raw)" }
       - uses: actions/upload-artifact@v4
         with:
           name: MikroTikManager-win-x64

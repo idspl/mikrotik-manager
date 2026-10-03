@@ -45,7 +45,7 @@ public sealed partial class MainForm : Form
         Width = 1440;
         Height = 850;
         StartPosition = FormStartPosition.CenterScreen;
-        MinimumSize = new Size(900, 560);
+        MinimumSize = new Size(760, 480);
         AllowDrop = true;
         _routers = new SortableBindingList<RouterRecord>(_store.LoadRouters());
         foreach (var router in _routers) { router.ApiStatus = "Not checked"; router.LastStatus = "Saved information — awaiting live check"; }
@@ -68,6 +68,9 @@ public sealed partial class MainForm : Form
         };
         Shown += async (_, _) =>
         {
+            var area = Screen.FromControl(this).WorkingArea;
+            MinimumSize = new Size(Math.Min(MinimumSize.Width, area.Width), Math.Min(MinimumSize.Height, area.Height));
+            Size = new Size(Math.Min(Width, area.Width), Math.Min(Height, area.Height));
             if (smokeTest) return;
             _ = RefreshRouterOsReleasesAsync();
             _routerGrid.ClearSelection();

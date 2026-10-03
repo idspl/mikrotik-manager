@@ -4,10 +4,11 @@ public sealed partial class MainForm
 {
     internal void RenderSmokeViews(float scale = 1F)
     {
+        File.AppendAllText("ui-layout-check.log", $"Starting scale {scale}\n");
         // Called only by --self-test with an isolated temporary SecureStore.
         if (_failureBehavior.SelectedItem is not FailureBehavior policy || policy != _store.LoadSettings().DefaultFailureBehavior) throw new Exception("Failure policy default was not selected.");
         _suspendRouterSaves = true; _routers.RaiseListChangedEvents = false;
-        for (int i = 0; i < 1000; i++) _routers.Add(new RouterRecord {
+        for (int i = 0; i < (scale == 1F ? 1000 : 57); i++) _routers.Add(new RouterRecord {
             Name = $"Client-{i + 1:0000}", Host = $"192.0.{2 + i / 250}.{1 + i % 250}", Site = i % 2 == 0 ? "Davanagere" : "Shivamogga",
             Group = "Client-end", Tags = "Customer", Model = "RB750Gr3", ApiStatus = i % 7 == 0 ? "Failed" : "Online", RouterOsVersion = "7.24.4", FirmwareVersion = "7.24.4", LastStatus = "Snapshot fixture" });
         _routers.RaiseListChangedEvents = true; _routers.ResetBindings();
@@ -17,6 +18,7 @@ public sealed partial class MainForm
         Size = new Size(1920, 1040); PerformLayout(); Application.DoEvents();
         void Capture(string name)
         {
+            File.AppendAllText("ui-layout-check.log", $"Capture {scale} {name}\n");
             PerformLayout(); Application.DoEvents();
             using var bitmap = new Bitmap(Width, Height); DrawToBitmap(bitmap, new Rectangle(0, 0, Width, Height));
             using var stream = new MemoryStream(); bitmap.Save(stream, System.Drawing.Imaging.ImageFormat.Png);
