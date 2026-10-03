@@ -56,7 +56,7 @@ public sealed partial class MainForm
     {
         var selected = SelectedRouters();
         var routers = selected.Count > 0 ? selected : _routers.ToList();
-        using var dialog = new Form { Text = "Local Backup History", Width = 1100, Height = 550, StartPosition = FormStartPosition.CenterParent };
+        using var dialog = new DpiDialog { Text = "Local Backup History", Width = 1100, Height = 550, StartPosition = FormStartPosition.CenterParent };
         var entries = routers.SelectMany(r => r.Backups.Select(b => new { Router = r.Name, Backup = b })).OrderByDescending(x => x.Backup.CreatedAt).ToList();
         var grid = new DataGridView { Dock = DockStyle.Fill, ReadOnly = true, AllowUserToAddRows = false, SelectionMode = DataGridViewSelectionMode.FullRowSelect, MultiSelect = false,
             AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.DisplayedCells,
@@ -90,7 +90,7 @@ public sealed partial class MainForm
 
     private string? AskArchivePassword(bool exporting)
     {
-        using var dialog = new Form { Text = exporting ? "Encrypt configuration export" : "Decrypt configuration import", Width = 440, Height = 200, StartPosition = FormStartPosition.CenterParent };
+        using var dialog = new DpiDialog { Text = exporting ? "Encrypt configuration export" : "Decrypt configuration import", Width = 440, Height = 200, StartPosition = FormStartPosition.CenterParent };
         var panel = new FlowLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(12), FlowDirection = FlowDirection.TopDown };
         panel.Controls.Add(new Label { AutoSize = true, Text = "Archive password (at least 12 characters for export)" });
         var password = new TextBox { Width = 370, UseSystemPasswordChar = true }; panel.Controls.Add(password);

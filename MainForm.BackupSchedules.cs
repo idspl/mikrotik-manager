@@ -16,7 +16,7 @@ public sealed partial class MainForm
         if (_operationInProgress || _updateInProgress) return;
         var routers = existing is null ? SelectedRouters() : existing.RouterIds.Select(id => _routers.FirstOrDefault(r => r.Id == id)).OfType<RouterRecord>().ToList();
         if (routers.Count == 0) { MessageBox.Show("Select routers on the Routers tab first."); return; }
-        using var dialog = new Form { Text = existing is null ? "Schedule Local Backups" : "Edit Backup Schedule", Width = 650, Height = 540,
+        using var dialog = new DpiDialog { Text = existing is null ? "Schedule Local Backups" : "Edit Backup Schedule", Width = 650, Height = 540,
             StartPosition = FormStartPosition.CenterParent, FormBorderStyle = FormBorderStyle.FixedDialog, MaximizeBox = false };
         var panel = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(18), ColumnCount = 2 };
         panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 165)); panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));

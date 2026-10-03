@@ -46,7 +46,7 @@ public sealed partial class MainForm
         List<RouterRecord> selected = SelectedRouters();
         if (selected.Count != 1) { MessageBox.Show("Select exactly one router to edit credentials."); return; }
         RouterRecord router = selected[0];
-        using var form = new Form { Text = "Edit Credentials — " + router.Name, Width = 470, Height = 280,
+        using var form = new DpiDialog { Text = "Edit Credentials — " + router.Name, Width = 470, Height = 280,
             StartPosition = FormStartPosition.CenterParent, FormBorderStyle = FormBorderStyle.FixedDialog, MaximizeBox = false, MinimizeBox = false };
         var layout = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(12), ColumnCount = 2, AutoSize = true };
         var username = new TextBox { Text = router.Username, Width = 260 };
@@ -96,7 +96,7 @@ public sealed partial class MainForm
 
     private void ShowHistory(object? sender, EventArgs e)
     {
-        using var form = new Form { Text = "Maintenance History — stages and results", Width = 1150, Height = 600, StartPosition = FormStartPosition.CenterParent };
+        using var form = new DpiDialog { Text = "Maintenance History — stages and results", Width = 1150, Height = 600, StartPosition = FormStartPosition.CenterParent };
         var grid = new DataGridView { Dock = DockStyle.Fill, ReadOnly = true, AllowUserToAddRows = false,
             AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.DisplayedCells };
         grid.DataSource = MaintenanceHistory.Load(_store).SelectMany(run => run.Stages.Select(stage => new
@@ -152,7 +152,7 @@ public sealed partial class MainForm
                     health.Snapshot?.RouterOsVersion ?? "Unknown", health.Snapshot?.CurrentFirmware ?? "Unknown",
                     health.Snapshot?.UpgradeFirmware ?? "Not applicable", health.Passed, router.StorageStatus, health.Summary);
             }
-            using var dialog = new Form { Text = "Upgrade Preview — confirm exact queue order", Width = 1100, Height = 550, StartPosition = FormStartPosition.CenterParent };
+            using var dialog = new DpiDialog { Text = "Upgrade Preview — confirm exact queue order", Width = 1100, Height = 550, StartPosition = FormStartPosition.CenterParent };
             var info = new Label { Dock = DockStyle.Top, Height = 100, Padding = new Padding(10), Text =
                 $"Channels: see each router row | Failure policy: {FriendlyBehavior(behavior)} | Retries: {retries}\n" +
                 "RouterOS target is resolved by the router at execution time; it is not pinned by this preview.\n" +

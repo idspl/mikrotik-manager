@@ -3,7 +3,7 @@ namespace MikroTikManager;
 public sealed partial class MainForm
 {
     private readonly SmoothGrid _backupGrid = new();
-    private readonly Label _backupCoverage = new() { Dock = DockStyle.Top, Height = 66, Padding = new Padding(15), Text = "Refresh coverage to check local backup files and schedules." };
+    private readonly Label _backupCoverage = new() { Dock = DockStyle.Fill, AutoSize = true, Padding = new Padding(15), Text = "Refresh coverage to check local backup files and schedules." };
     private bool _readingCoverage;
     private sealed record BackupCoverageRow(Guid Id, string Device, string Site, string Coverage, DateTime? LastBackup, DateTime? LastAttempt, string Error);
 
@@ -19,7 +19,13 @@ public sealed partial class MainForm
         _backupGrid.Dock = DockStyle.Fill; _backupGrid.ReadOnly = true; _backupGrid.AllowUserToAddRows = false;
         _backupGrid.SelectionMode = DataGridViewSelectionMode.FullRowSelect; _backupGrid.MultiSelect = false;
         _backupGrid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill; StyleGrid(_backupGrid);
-        page.Controls.Add(_backupGrid); page.Controls.Add(_backupCoverage); page.Controls.Add(bar);
+        var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 3, Margin = Padding.Empty };
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize)); layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        bar.Dock = DockStyle.Fill; bar.Margin = Padding.Empty; _backupCoverage.Margin = Padding.Empty; _backupGrid.Margin = Padding.Empty;
+        layout.Controls.Add(bar, 0, 0); layout.Controls.Add(_backupCoverage, 0, 1); layout.Controls.Add(_backupGrid, 0, 2);
+        page.Controls.Add(layout);
         _tabs.SelectedIndexChanged += async (_, _) => { if (_tabs.SelectedTab == page) await RefreshBackupCoverageAsync(); };
         return page;
     }
@@ -50,6 +56,13 @@ public sealed partial class MainForm
             if (IsDisposed) return;
             _backupGrid.DataSource = rows;
             if (_backupGrid.Columns.Contains("Id")) _backupGrid.Columns["Id"].Visible = false;
+            foreach (DataGridViewColumn column in _backupGrid.Columns)
+            {
+                column.HeaderText = column.Name switch { "LastBackup" => "Last backup", "LastAttempt" => "Last attempt", _ => column.Name };
+                column.MinimumWidth = column.Name == "Coverage" ? 240 : column.Name == "Device" ? 200 : 100;
+                column.FillWeight = column.Name == "Coverage" ? 240 : column.Name == "Device" ? 200 : 100;
+                if (column.Name is "LastBackup" or "LastAttempt") column.DefaultCellStyle.Format = "dd MMM yyyy HH:mm";
+            }
             _backupCoverage.Text = $"{rows.Count} devices   •   {rows.Count(r => r.Coverage == "Covered")} covered   •   {rows.Count(r => r.Coverage.Contains("Never"))} never backed up   •   {rows.Count(r => r.Coverage.Contains("No active"))} unscheduled\n{rows.Count(r => r.Coverage.Contains("Overdue"))} overdue   •   {rows.Count(r => r.Coverage.Contains("failed"))} failed   •   {rows.Count(r => r.Coverage.Contains("missing"))} missing files   |   Checked {DateTime.Now:T}";
         }
         catch (Exception ex) { if (!IsDisposed) _backupCoverage.Text = ex.Message; }
@@ -61,7 +74,7 @@ public sealed partial class MainForm
         var router = _routers.FirstOrDefault(r => r.Id == row.Id); if (router is null) return;
         var entries = router.Backups.OrderByDescending(b => b.CreatedAt).ToList();
         if (entries.Count < 2) { MessageBox.Show("This device needs two recorded exports to compare."); return; }
-        using var dialog = new Form { Text = "Compare backups — " + router.Name, Width = 1150, Height = 720, StartPosition = FormStartPosition.CenterParent };
+        using var dialog = new DpiDialog { Text = "Compare backups — " + router.Name, Width = 1150, Height = 720, StartPosition = FormStartPosition.CenterParent };
         var bar = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, Padding = new Padding(10) };
         var before = new ComboBox { Width = 230, DropDownStyle = ComboBoxStyle.DropDownList };
         var after = new ComboBox { Width = 230, DropDownStyle = ComboBoxStyle.DropDownList };

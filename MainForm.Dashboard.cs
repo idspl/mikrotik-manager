@@ -18,10 +18,13 @@ public sealed partial class MainForm
         var cards = new FlowLayoutPanel { AutoSize = true, WrapContents = true, Width = 1080, MaximumSize = new Size(1080, 0) };
         foreach (string title in new[] { "Routers", "API online", "API failed", "Not checked", "Updates available", "Backup >7d / never" })
         {
-            var card = new Panel { Size = new Size(166, 105), BackColor = Color.White, Margin = new Padding(0, 0, 12, 12), Padding = new Padding(14) };
-            var count = new Label { Text = "—", Dock = DockStyle.Top, Height = 46, Font = new Font("Segoe UI", 25, FontStyle.Bold), ForeColor = Color.FromArgb(28, 76, 128) };
-            card.Controls.Add(new Label { Text = title, Dock = DockStyle.Bottom, Height = 24, ForeColor = Color.FromArgb(65, 75, 90) });
-            card.Controls.Add(count); cards.Controls.Add(card); _dashboardCounts[title] = count;
+            var card = new TableLayoutPanel { AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                ColumnCount = 1, RowCount = 2, MinimumSize = new Size(166, 0), BackColor = Color.White,
+                Margin = new Padding(0, 0, 12, 12), Padding = new Padding(14) };
+            var count = new Label { Text = "—", AutoSize = true, Margin = new Padding(0, 0, 0, 6), Font = new Font("Segoe UI", 25, FontStyle.Bold), ForeColor = Color.FromArgb(28, 76, 128) };
+            card.Controls.Add(count, 0, 0);
+            card.Controls.Add(new Label { Text = title, AutoSize = true, Margin = Padding.Empty, ForeColor = Color.FromArgb(65, 75, 90) }, 0, 1);
+            cards.Controls.Add(card); _dashboardCounts[title] = count;
         }
         layout.Controls.Add(cards);
         var actions = new FlowLayoutPanel { AutoSize = true, Margin = new Padding(0, 2, 0, 14) };
@@ -41,9 +44,10 @@ public sealed partial class MainForm
         layout.Controls.Add(new Label { Text = "Made for MikroTik • Independent software by Indigo Data Services. MikroTik trademarks belong to MikroTikls SIA.", AutoSize = true, ForeColor = Color.DimGray, Margin = new Padding(3, 16, 3, 16) });
         page.Controls.Add(layout);
         page.Resize += (_, _) => {
-            int width = Math.Max(600, page.ClientSize.Width - 65);
+            int width = Math.Max(240, layout.ClientSize.Width - layout.Padding.Horizontal - SystemInformation.VerticalScrollBarWidth - 12);
             _dashboardNote.MaximumSize = new Size(width - 16, 0);
             cards.MaximumSize = new Size(width, 0); cards.Width = width;
+            actions.MaximumSize = new Size(width, 0); actions.Width = width;
             _dashboardJobs.Width = width; _dashboardGroups.Width = width;
         };
         return page;
@@ -85,7 +89,7 @@ public sealed partial class MainForm
     {
         grid.RowHeadersVisible = false; grid.BorderStyle = BorderStyle.None; grid.BackgroundColor = Color.White;
         grid.GridColor = Color.FromArgb(225, 229, 235); grid.RowTemplate.Height = 30;
-        grid.EnableHeadersVisualStyles = false; grid.ColumnHeadersHeight = 36;
+        grid.EnableHeadersVisualStyles = false; grid.ColumnHeadersHeight = 36; grid.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
         grid.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(28, 49, 78);
         grid.ColumnHeadersDefaultCellStyle.ForeColor = Color.White;
         grid.ColumnHeadersDefaultCellStyle.SelectionBackColor = grid.ColumnHeadersDefaultCellStyle.BackColor;

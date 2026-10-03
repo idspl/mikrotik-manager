@@ -1,4 +1,4 @@
-# MikroTik Manager 0.5.0
+# MikroTik Manager 0.5.1
 
 [![Windows build](https://github.com/idspl/mikrotik-manager/actions/workflows/windows-build.yml/badge.svg)](https://github.com/idspl/mikrotik-manager/actions/workflows/windows-build.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -36,6 +36,15 @@ MikroTik Manager is currently distributed without a paid Authenticode certificat
 Do not run the file if it came from another website, the checksum differs, VirusTotal reports multiple credible detections, or the release cannot be matched to this repository. A single generic or heuristic detection can be a false positive; investigate it rather than assuming either safety or infection.
 
 Use a test router before production deployment. Router upgrades, reboots and sensitive configuration exports can interrupt services or expose credentials if operated without appropriate controls.
+
+## 0.5.1 display scaling and layout corrections
+
+- Explicit per-monitor DPI scaling for the main window and dialogs.
+- Dashboard cards size to their content; Maintenance navigation uses a shorter label.
+- Device columns fill available width, with distinct Group and Channel headings and readable minimum widths.
+- Upgrade scheduling uses a resizable, scrolling form with full date/time fields and a separate button footer.
+- Backup coverage summary expands above the table; date headings are readable.
+- Layout regression fixtures exercise 100%, 125%, 150% and 200% scale factors. Physical mixed-DPI monitor testing is still required.
 
 ## 0.5.0 workspace and parallel maintenance
 

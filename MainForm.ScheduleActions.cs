@@ -6,17 +6,42 @@ public sealed partial class MainForm
     {
         if (_operationInProgress || _updateInProgress) return;
         if (SelectedRouters().Count == 0) { MessageBox.Show("Select devices in Devices first."); return; }
-        using var dialog = new Form { Text = "Create Upgrade Schedule", Width = 530, Height = 380, StartPosition = FormStartPosition.CenterParent };
-        var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, Padding = new Padding(18) };
-        AddRow(layout, "Name", _jobName); AddRow(layout, "Run at", _scheduleTime);
-        AddRow(layout, "Concurrent (0 = all)", _scheduleConcurrency);
-        AddRow(layout, "", _scheduleWindow); AddRow(layout, "Cutoff", _scheduleEnd);
-        AddRow(layout, "", new Label { Text = "Parallel upgrades require independent devices. Failure policy and retries use the Devices screen settings.", AutoSize = true, MaximumSize = new Size(280, 70) });
-        AddRow(layout, "", new Button { Text = "Create Schedule", AutoSize = true, DialogResult = DialogResult.OK }); dialog.Controls.Add(layout);
-        var result = dialog.ShowDialog(this);
-        // These fields belong to MainForm and must outlive the temporary dialog.
-        foreach (Control control in new Control[] { _jobName, _scheduleTime, _scheduleConcurrency, _scheduleWindow, _scheduleEnd }) layout.Controls.Remove(control);
-        if (result == DialogResult.OK) CreateSchedule(sender, e);
+        using var dialog = BuildUpgradeScheduleDialog(out var name, out var start, out var concurrent, out var cutoffEnabled, out var cutoff);
+        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+        _jobName.Text = name.Text; _scheduleTime.Value = start.Value;
+        _scheduleConcurrency.Value = concurrent.Value; _scheduleWindow.Checked = cutoffEnabled.Checked; _scheduleEnd.Value = cutoff.Value;
+        CreateSchedule(sender, e);
+    }
+
+    private DpiDialog BuildUpgradeScheduleDialog(out TextBox name, out DateTimePicker start,
+        out NumericUpDown concurrent, out CheckBox cutoffEnabled, out DateTimePicker cutoff)
+    {
+        var dialog = new DpiDialog { Text = "Create Upgrade Schedule", ClientSize = new Size(570, 390),
+            MinimumSize = new Size(480, 360), StartPosition = FormStartPosition.CenterParent, MaximizeBox = false };
+        var shell = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 2 };
+        shell.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        shell.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); shell.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        var scroll = new Panel { Dock = DockStyle.Fill, AutoScroll = true };
+        var layout = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 2, Padding = new Padding(18) };
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize)); layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        name = new TextBox { Text = _jobName.Text, Dock = DockStyle.Fill };
+        start = new DateTimePicker { Format = DateTimePickerFormat.Custom, CustomFormat = "dd MMM yyyy  HH:mm", Dock = DockStyle.Fill, Value = _scheduleTime.Value };
+        concurrent = new NumericUpDown { Minimum = 0, Maximum = 10000, Value = _scheduleConcurrency.Value, Width = 100 };
+        cutoffEnabled = new CheckBox { Text = "Stop starting devices after cutoff", Checked = _scheduleWindow.Checked, AutoSize = true };
+        cutoff = new DateTimePicker { Format = DateTimePickerFormat.Custom, CustomFormat = "dd MMM yyyy  HH:mm", Dock = DockStyle.Fill, Value = _scheduleEnd.Value, Enabled = cutoffEnabled.Checked };
+        var check = cutoffEnabled; var end = cutoff;
+        check.CheckedChanged += (_, _) => end.Enabled = check.Checked;
+        AddRow(layout, "Name", name); AddRow(layout, "Run at", start); AddRow(layout, "Concurrent (0 = all)", concurrent);
+        AddRow(layout, "", cutoffEnabled); AddRow(layout, "Cutoff", cutoff);
+        var note = new Label { Text = "Parallel upgrades require independent devices. Failure policy and retries use the Upgrade menu settings.", AutoSize = true, Dock = DockStyle.Fill, Margin = new Padding(3, 12, 3, 12) };
+        int row = layout.RowCount++; layout.RowStyles.Add(new RowStyle(SizeType.AutoSize)); layout.Controls.Add(note, 0, row); layout.SetColumnSpan(note, 2);
+        scroll.Controls.Add(layout);
+        var footer = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, FlowDirection = FlowDirection.RightToLeft, Padding = new Padding(12), BackColor = Color.FromArgb(232, 241, 252) };
+        var create = Button("Create Schedule", (_, _) => { }); create.DialogResult = DialogResult.OK;
+        var cancel = Button("Cancel", (_, _) => { }); cancel.DialogResult = DialogResult.Cancel;
+        footer.Controls.Add(create); footer.Controls.Add(cancel); dialog.AcceptButton = create; dialog.CancelButton = cancel;
+        shell.Controls.Add(scroll, 0, 0); shell.Controls.Add(footer, 0, 1); dialog.Controls.Add(shell);
+        return dialog;
     }
     private void BuildScheduleContextMenu()
     {

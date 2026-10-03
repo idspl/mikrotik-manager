@@ -7,7 +7,7 @@ public sealed partial class MainForm
         var selected = SelectedRouters();
         if (selected.Count != 1) { MessageBox.Show("Select one device to open its details."); return; }
         var router = selected[0];
-        using var dialog = new Form { Text = router.Name + " — Device Details", Width = 1060, Height = 740, MinimumSize = new Size(760, 520), StartPosition = FormStartPosition.CenterParent, Font = Font };
+        using var dialog = new DpiDialog { Text = router.Name + " — Device Details", Width = 1060, Height = 740, MinimumSize = new Size(760, 520), StartPosition = FormStartPosition.CenterParent, Font = Font };
         using var cancellation = new CancellationTokenSource();
         var tabs = new TabControl { Dock = DockStyle.Fill };
         TabPage overview = new TabPage("Overview"), interfaces = new TabPage("Interfaces"), versions = new TabPage("Versions"), backups = new TabPage("Backup History");
