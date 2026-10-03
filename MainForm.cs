@@ -30,6 +30,7 @@ public sealed partial class MainForm : Form
     private bool _suspendRouterSaves;
     private bool _contextMenuRowValid;
     private List<Guid> _lastUpgradeRouterIds = [];
+    private readonly Button _skipFailedContinue = new() { Text = "Skip Failed & Continue", AutoSize = true, Enabled = false };
 
     public MainForm()
     {
@@ -252,8 +253,10 @@ public sealed partial class MainForm : Form
     private TabPage BuildMaintenancePage()
     {
         var page = new TabPage("Maintenance Progress");
-        var bar = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 46, Padding = new Padding(8), WrapContents = false };
+        var bar = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, Padding = new Padding(8), WrapContents = true };
         bar.Controls.Add(Button("Retry Failed", RetryFailed));
+        _skipFailedContinue.Click += SkipFailedAndContinue;
+        bar.Controls.Add(_skipFailedContinue);
         bar.Controls.Add(Button("Pause After Current Router", PauseAfterRouter));
         bar.Controls.Add(Button("History", ShowHistory));
         bar.Controls.Add(Button("Open Reports Folder", OpenReportsFolder));
@@ -1136,6 +1139,7 @@ public sealed partial class MainForm : Form
     {
         _operationInProgress = busy;
         _status.Text = text;
+        UpdateSkipFailedButton();
 
         // Keep the grid enabled so operators can scroll and select rows while
         // status updates arrive. Only editable connection fields are locked.
