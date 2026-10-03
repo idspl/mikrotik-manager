@@ -3,7 +3,7 @@ namespace MikroTikManager;
 public sealed partial class MainForm
 {
     private readonly SmoothGrid _backupGrid = new();
-    private readonly Label _backupCoverage = new() { Dock = DockStyle.Fill, AutoSize = false, Padding = new Padding(15), Text = "Refresh coverage to check local backup files and schedules." };
+    private readonly Label _backupCoverage = new() { Dock = DockStyle.Top, AutoSize = false, Padding = new Padding(15), Text = "Refresh coverage to check local backup files and schedules." };
     private bool _readingCoverage;
     private sealed record BackupCoverageRow(Guid Id, string Device, string Site, string Coverage, DateTime? LastBackup, DateTime? LastAttempt, string Error);
 
@@ -19,21 +19,15 @@ public sealed partial class MainForm
         _backupGrid.Dock = DockStyle.Fill; _backupGrid.ReadOnly = true; _backupGrid.AllowUserToAddRows = false;
         _backupGrid.SelectionMode = DataGridViewSelectionMode.FullRowSelect; _backupGrid.MultiSelect = false;
         _backupGrid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill; StyleGrid(_backupGrid);
-        var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 3, Margin = Padding.Empty };
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize)); layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 72));
-        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        bar.Dock = DockStyle.Fill; bar.Margin = Padding.Empty; _backupCoverage.Margin = Padding.Empty; _backupGrid.Margin = Padding.Empty;
-        layout.Controls.Add(bar, 0, 0); layout.Controls.Add(_backupCoverage, 0, 1); layout.Controls.Add(_backupGrid, 0, 2);
-        page.Controls.Add(layout);
+        page.Controls.Add(_backupGrid); page.Controls.Add(_backupCoverage); page.Controls.Add(bar);
         void SizeSummary()
         {
-            int width = Math.Max(100, layout.ClientSize.Width - _backupCoverage.Padding.Horizontal);
+            int width = Math.Max(100, page.ClientSize.Width - _backupCoverage.Padding.Horizontal);
             int height = TextRenderer.MeasureText(_backupCoverage.Text, _backupCoverage.Font, new Size(width, int.MaxValue),
                 TextFormatFlags.WordBreak | TextFormatFlags.TextBoxControl).Height + _backupCoverage.Padding.Vertical + 8;
-            if (Math.Abs(layout.RowStyles[1].Height - height) > 1) layout.RowStyles[1].Height = height;
+            if (_backupCoverage.Height != height) _backupCoverage.Height = height;
         }
-        layout.SizeChanged += (_, _) => SizeSummary(); _backupCoverage.TextChanged += (_, _) => SizeSummary();
+        page.SizeChanged += (_, _) => SizeSummary(); _backupCoverage.TextChanged += (_, _) => SizeSummary();
         _backupCoverage.FontChanged += (_, _) => SizeSummary(); SizeSummary();
         _tabs.SelectedIndexChanged += async (_, _) => { if (_tabs.SelectedTab == page) await RefreshBackupCoverageAsync(); };
         return page;

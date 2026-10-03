@@ -46,9 +46,12 @@ public sealed partial class MainForm
         _tabs.SelectedTab = _maintenancePage; Capture("progress");
         _tabs.SelectedTab = _schedulesPage; Capture("schedules");
         _tabs.SelectedTab = _tabs.TabPages.Cast<TabPage>().Single(p => p.Text == "Backups");
+        var coverageWait = System.Diagnostics.Stopwatch.StartNew();
+        while (_readingCoverage && coverageWait.Elapsed < TimeSpan.FromSeconds(10)) { Application.DoEvents(); Thread.Sleep(10); }
+        if (_readingCoverage || _backupGrid.Rows.Count != _routers.Count) throw new Exception("Backup coverage did not populate");
         _backupCoverage.Text = "57 devices • 0 covered • 57 never backed up • 57 unscheduled\n0 overdue • 0 failed • 0 missing files | Checked 22:42:00";
         Application.DoEvents(); Capture("backups");
-        if (_backupGrid.Height < 100 || _backupCoverage.Height < _backupCoverage.GetPreferredSize(new Size(_backupCoverage.Width, 0)).Height || _backupGrid.Top < _backupCoverage.Bottom)
+        if (_backupGrid.Bottom > _backupGrid.Parent!.ClientSize.Height || _backupGrid.Height < 100 || _backupCoverage.Height < _backupCoverage.GetPreferredSize(new Size(_backupCoverage.Width, 0)).Height || _backupGrid.Top < _backupCoverage.Bottom)
             throw new Exception("Backup summary overlaps table at " + scale);
         using (var dialog = BuildUpgradeScheduleDialog(out _, out var date, out _, out _, out _))
         {
