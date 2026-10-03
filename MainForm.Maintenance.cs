@@ -30,7 +30,7 @@ public sealed partial class MainForm
         if (routers.Count == 0) { MessageBox.Show("No unstarted routers remain after the failed routers."); return; }
         // RunUpgradeAsync presents readiness, queue order, and cutoff/group controls
         // before starting. Failed, completed and interrupted routers are excluded.
-        await RunUpgradeAsync(routers, FailureBehavior.Skip, 0);
+        await RunUpgradeAsync(routers, FailureBehavior.Skip, 0, preserveProgress: true);
     }
 
     private void PauseAfterRouter(object? sender, EventArgs e)
