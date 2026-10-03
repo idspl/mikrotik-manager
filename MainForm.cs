@@ -886,12 +886,15 @@ public sealed partial class MainForm : Form
         await RunUpgradeAsync(selected, behavior, (int)_retryCount.Value);
     }
 
-    private async Task RunUpgradeAsync(List<RouterRecord> selected, FailureBehavior behavior, int retries)
+    private async Task RunUpgradeAsync(List<RouterRecord> selected, FailureBehavior behavior, int retries, bool preserveProgress = false)
     {
         if (!await PreviewUpgradeAsync(selected, behavior, retries)) return;
         SaveRouters();
-        _lastUpgradeRouterIds = selected.Select(x => x.Id).ToList();
-        PrepareProgressRows(selected);
+        if (!preserveProgress)
+        {
+            _lastUpgradeRouterIds = selected.Select(x => x.Id).ToList();
+            PrepareProgressRows(selected);
+        }
         SetBusy(true, "Upgrade running...");
         _tabs.SelectedTab = _maintenancePage;
         _running = new CancellationTokenSource();
