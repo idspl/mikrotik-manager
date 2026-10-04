@@ -1,6 +1,6 @@
 namespace MikroTikManager;
 
-public sealed class BackupFolderDialog : Form
+public sealed class BackupFolderDialog : DpiDialog
 {
     private readonly TextBox _path = new() { Dock = DockStyle.Fill };
     public string SelectedPath { get; private set; } = "";

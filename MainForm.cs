@@ -38,8 +38,9 @@ public sealed partial class MainForm : Form
         AutoScaleDimensions = new SizeF(96F, 96F);
         AutoScaleMode = AutoScaleMode.Dpi;
         _store = store ?? new SecureStore();
+        AppTheme.Set(_store.LoadSettings().Theme);
         _routerContextMenu = new ContextMenuStrip(_components);
-        Text = "MikroTik Manager 0.5.1";
+        Text = "MikroTik Manager 0.5.2";
         Font = new Font("Segoe UI", 9F);
         Icon = AppIcon.Current;
         Width = 1440;
@@ -52,6 +53,7 @@ public sealed partial class MainForm : Form
         _jobs = new BindingList<UpgradeJob>(_store.LoadJobs());
         foreach (var job in _jobs.Where(x => x.State == "Running")) job.State = "Interrupted — review maintenance history";
         BuildUi();
+        AppTheme.Apply(this);
         ResumeLayout(true);
         DragEnter += MainFormDragEnter;
         DragDrop += MainFormDragDrop;
@@ -186,8 +188,8 @@ public sealed partial class MainForm : Form
         var updatesMenu = new ToolStripDropDownButton("Help") { Alignment = ToolStripItemAlignment.Right };
         updatesMenu.DropDownItems.Add("Check for Updates", null, async (_, _) => await CheckForUpdatesAsync(true));
         updatesMenu.DropDownItems.Add(new ToolStripSeparator());
-        updatesMenu.DropDownItems.Add("About MikroTik Manager 0.5.1", null, (_, _) =>
-            MessageBox.Show("MikroTik Manager 0.5.1\n\nMade for MikroTik\nIndependent open-source software by Indigo Data Services Pvt Ltd.", Text,
+        updatesMenu.DropDownItems.Add("About MikroTik Manager 0.5.2", null, (_, _) =>
+            MessageBox.Show("MikroTik Manager 0.5.2\n\nMade for MikroTik\nIndependent open-source software by Indigo Data Services Pvt Ltd.", Text,
                 MessageBoxButtons.OK, MessageBoxIcon.Information));
         actions.Items.AddRange([inventoryMenu, selectionMenu, groupMenu, maintenanceMenu, upgradeMenu, updatesMenu]);
 
@@ -397,6 +399,10 @@ public sealed partial class MainForm : Form
         channel.Items.AddRange(["stable", "long-term", "testing", "development"]);
         channel.SelectedItem = current.UpdateChannel;
         if (channel.SelectedIndex < 0) channel.SelectedIndex = 0;
+        _themeChoice.Items.AddRange(["Light", "Dark"]);
+        _themeChoice.SelectedItem = AppTheme.IsDark ? "Dark" : "Light";
+        _themeChoice.SelectedIndexChanged += (_, _) => { if (!_changingTheme) ChangeTheme(_themeChoice.SelectedItem?.ToString() ?? "Light"); };
+        AddRow(panel, "Appearance (saved immediately)", _themeChoice);
         AddRow(panel, "Default RouterOS API port", apiPort);
         AddRow(panel, "Encrypted API connection", ssl);
         AddRow(panel, "TLS certificate handling", invalid);
@@ -422,6 +428,7 @@ public sealed partial class MainForm : Form
         {
             var value = new AppSettings
             {
+                Theme = _themeChoice.SelectedItem?.ToString() ?? "Light",
                 DefaultApiPort = (int)apiPort.Value,
                 UseApiSsl = ssl.Checked,
                 AllowInvalidTlsCertificate = invalid.Checked,

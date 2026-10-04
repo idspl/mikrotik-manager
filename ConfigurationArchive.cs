@@ -42,6 +42,7 @@ internal static class ConfigurationArchive
                 || bundle.Jobs.Any(x => x.MaxConcurrency is < 0 or > 10000 || x.FailureLimit is < 0 or > 10000 || !Enum.IsDefined(x.Kind) || !Enum.IsDefined(x.Recurrence) || x.RetentionDays is < 0 or > 3650
                     || x.Kind == ScheduledJobKind.Upgrade && x.Recurrence != BackupRecurrence.Once
                     || x.Kind == ScheduledJobKind.Backup && (string.IsNullOrWhiteSpace(x.BackupFolder) || !Path.IsPathFullyQualified(x.BackupFolder)))
+                || bundle.Settings.Theme is not ("Light" or "Dark")
                 || bundle.Settings.DefaultApiPort is < 1 or > 65535
                 || bundle.Settings.ConnectTimeoutSeconds is < 3 or > 120
                 || bundle.Settings.ReconnectTimeoutMinutes is < 1 or > 120

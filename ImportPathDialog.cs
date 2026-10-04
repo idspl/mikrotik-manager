@@ -1,6 +1,6 @@
 namespace MikroTikManager;
 
-public sealed class ImportPathDialog : Form
+public sealed class ImportPathDialog : DpiDialog
 {
     private readonly TextBox _path = new() { Dock = DockStyle.Top, Height = 28 };
     public string SelectedPath => _path.Text.Trim().Trim('"');

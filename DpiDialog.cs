@@ -2,7 +2,7 @@ namespace MikroTikManager;
 
 // These dialogs are constructed entirely in code, in 96-DPI logical units.
 // Defer the initial scaling until every child has been added.
-internal class DpiDialog : Form
+public class DpiDialog : Form
 {
     public DpiDialog()
     {
@@ -18,6 +18,7 @@ internal class DpiDialog : Form
         AutoScaleMode = AutoScaleMode.Dpi;
         ResumeLayout(true);
         PerformAutoScale();
+        AppTheme.Apply(this);
         base.OnLoad(e);
     }
 }

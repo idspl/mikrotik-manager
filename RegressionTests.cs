@@ -47,7 +47,7 @@ internal static class RegressionTests
         // Construct every tab on the STA entry thread without showing the form or contacting routers.
         // Run form construction on its own STA thread after async dispatcher tests.
         Exception? uiFailure = null;
-        var uiThread = new Thread(() => { try { foreach (float scale in new[] { 1F, 1.25F, 1.5F, 2F }) { using var form = new MainForm(new SecureStore(Path.Combine(directory, "ui-" + scale)), smokeTest: true); form.RenderSmokeViews(scale); Check(form.Text.Contains("0.5.1"), "Dashboard and menus construct on Windows"); } } catch (Exception ex) { uiFailure = ex; } });
+        var uiThread = new Thread(() => { try { foreach (float scale in new[] { 1F, 1.25F, 1.5F, 2F }) { using var form = new MainForm(new SecureStore(Path.Combine(directory, "ui-" + scale)), smokeTest: true); form.RenderSmokeViews(scale); Check(form.Text.Contains("0.5.2"), "Dashboard and menus construct on Windows"); } } catch (Exception ex) { uiFailure = ex; } });
         uiThread.IsBackground = true; uiThread.SetApartmentState(ApartmentState.STA); uiThread.Start();
         Check(uiThread.Join(TimeSpan.FromMinutes(3)), "UI layout checks timed out; see ui-layout-check.log");
         Check(uiFailure is null, "Windows workspace construction: " + uiFailure);
