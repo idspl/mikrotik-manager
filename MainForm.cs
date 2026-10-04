@@ -40,7 +40,7 @@ public sealed partial class MainForm : Form
         _store = store ?? new SecureStore();
         AppTheme.Set(_store.LoadSettings().Theme);
         _routerContextMenu = new ContextMenuStrip(_components);
-        Text = "MikroTik Manager 0.5.2";
+        Text = "MikroTik Manager 0.5.3";
         Font = new Font("Segoe UI", 9F);
         Icon = AppIcon.Current;
         Width = 1440;
@@ -188,8 +188,8 @@ public sealed partial class MainForm : Form
         var updatesMenu = new ToolStripDropDownButton("Help") { Alignment = ToolStripItemAlignment.Right };
         updatesMenu.DropDownItems.Add("Check for Updates", null, async (_, _) => await CheckForUpdatesAsync(true));
         updatesMenu.DropDownItems.Add(new ToolStripSeparator());
-        updatesMenu.DropDownItems.Add("About MikroTik Manager 0.5.2", null, (_, _) =>
-            MessageBox.Show("MikroTik Manager 0.5.2\n\nMade for MikroTik\nIndependent open-source software by Indigo Data Services Pvt Ltd.", Text,
+        updatesMenu.DropDownItems.Add("About MikroTik Manager 0.5.3", null, (_, _) =>
+            MessageBox.Show("MikroTik Manager 0.5.3\n\nMade for MikroTik\nIndependent open-source software by Indigo Data Services Pvt Ltd.", Text,
                 MessageBoxButtons.OK, MessageBoxIcon.Information));
         actions.Items.AddRange([inventoryMenu, selectionMenu, groupMenu, maintenanceMenu, upgradeMenu, updatesMenu]);
 
@@ -401,7 +401,7 @@ public sealed partial class MainForm : Form
         if (channel.SelectedIndex < 0) channel.SelectedIndex = 0;
         _themeChoice.Items.AddRange(["Light", "Dark"]);
         _themeChoice.SelectedItem = AppTheme.IsDark ? "Dark" : "Light";
-        _themeChoice.SelectedIndexChanged += (_, _) => { if (!_changingTheme) ChangeTheme(_themeChoice.SelectedItem?.ToString() ?? "Light"); };
+        _themeChoice.SelectedIndexChanged += (_, _) => { if (!_changingTheme) ChangeTheme(_themeChoice.SelectedItem?.ToString() ?? "Dark"); };
         AddRow(panel, "Appearance (saved immediately)", _themeChoice);
         AddRow(panel, "Default RouterOS API port", apiPort);
         AddRow(panel, "Encrypted API connection", ssl);
@@ -428,7 +428,7 @@ public sealed partial class MainForm : Form
         {
             var value = new AppSettings
             {
-                Theme = _themeChoice.SelectedItem?.ToString() ?? "Light",
+                Theme = _themeChoice.SelectedItem?.ToString() ?? "Dark",
                 DefaultApiPort = (int)apiPort.Value,
                 UseApiSsl = ssl.Checked,
                 AllowInvalidTlsCertificate = invalid.Checked,
@@ -1152,7 +1152,8 @@ public sealed partial class MainForm : Form
                 {
                     _status.Text = "Downloading and verifying update; please wait...";
                     using var downloadTimeout = new CancellationTokenSource(TimeSpan.FromMinutes(10));
-                    string downloaded = await SelfUpdater.DownloadAsync(result.Version, downloadTimeout.Token);
+                    var progress = new Progress<string>(message => { if (!IsDisposed && _updateInProgress) _status.Text = message; });
+                    string downloaded = await Task.Run(() => SelfUpdater.DownloadAsync(result.Version, downloadTimeout.Token, progress));
                     if (MessageBox.Show("Checksum verified. Install and restart now?\n\nThe previous EXE will be kept as .previous. No router data will be removed.", Text,
                         MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
                     {

@@ -81,7 +81,7 @@ public enum FailureBehavior
 
 public sealed class AppSettings
 {
-    public string Theme { get; set; } = "Light";
+    public string Theme { get; set; } = "Dark";
     public int DefaultApiPort { get; set; } = 8728;
     public bool UseApiSsl { get; set; }
     public bool AllowInvalidTlsCertificate { get; set; }

@@ -1,4 +1,4 @@
-# MikroTik Manager 0.5.2
+# MikroTik Manager 0.5.3
 
 [![Windows build](https://github.com/idspl/mikrotik-manager/actions/workflows/windows-build.yml/badge.svg)](https://github.com/idspl/mikrotik-manager/actions/workflows/windows-build.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -37,13 +37,20 @@ Do not run the file if it came from another website, the checksum differs, Virus
 
 Use a test router before production deployment. Router upgrades, reboots and sensitive configuration exports can interrupt services or expose credentials if operated without appropriate controls.
 
+## 0.5.3 appearance and updater
+
+- Choose Light or Dark only in Settings → Appearance. Dark is the default for new settings and older settings without a theme; saved choices are preserved.
+- Compressed standalone EXE reduces download size. Compression can add startup work; the application still includes its .NET runtime.
+- Updates show downloaded size, percentage (when supplied by GitHub), average transfer speed and checksum verification status. Download and verification run away from the UI thread.
+- Downloads use one asynchronous HTTP stream, not parallel segments. SHA-256 verification and the previous-EXE recovery copy remain in place.
+
 ## 0.5.2 dark mode
 
-- Switch Light/Dark from the sidebar or Settings → Appearance; saved immediately and restored on startup.
+- Switch Light/Dark from Settings → Appearance; saved immediately and restored on startup.
 - Applies to dashboard, inventory, maintenance, backups, settings, logs, menus and application dialogs without resetting selection or scroll.
 - Status colours and export comparisons retain readable success/failure colours in both themes.
 - Windows-provided message boxes, file pickers, date fields/calendar popups, title bars and some native control buttons/borders/scrollbars continue to follow Windows appearance.
-- The branded splash screen remains dark in both modes. Existing installations retain Light until changed.
+- The branded splash screen remains dark in both modes. Saved theme choices are preserved.
 - See [feature audit](FEATURE-AUDIT.md) for current coverage and candidate future work.
 
 ## 0.5.1 display scaling and layout corrections
