@@ -64,7 +64,7 @@ public sealed partial class MainForm
 
     private Control BuildNavigation()
     {
-        var side = new Panel { Dock = DockStyle.Left, Width = 180, BackColor = Color.FromArgb(23, 39, 62), Padding = new Padding(12) };
+        var side = new Panel { Name = "Navigation", Dock = DockStyle.Left, Width = 180, BackColor = Color.FromArgb(23, 39, 62), Padding = new Padding(12) };
         var scroll = new Panel { Dock = DockStyle.Fill, AutoScroll = true };
         var list = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 1, Padding = Padding.Empty, Margin = Padding.Empty };
         list.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
@@ -81,7 +81,10 @@ public sealed partial class MainForm
         void Highlight() { foreach (var item in buttons) item.Button.BackColor = item.Page == _tabs.SelectedTab ? Color.FromArgb(45, 99, 170) : side.BackColor; }
         _tabs.SelectedIndexChanged += (_, _) => Highlight(); Highlight();
         scroll.Controls.Add(list); side.Controls.Add(scroll);
-        side.Controls.Add(new Label { Text = "Made for MikroTik\nv0.5.1 • Open source", Dock = DockStyle.Bottom, AutoSize = true, ForeColor = Color.LightSteelBlue, Padding = new Padding(4, 8, 0, 0) });
+        side.Controls.Add(new Label { Text = "Made for MikroTik\nv0.5.2 • Open source", Dock = DockStyle.Bottom, AutoSize = true, ForeColor = Color.LightSteelBlue, Padding = new Padding(4, 8, 0, 0) });
+        _themeToggle.Text = AppTheme.IsDark ? "Switch to light mode" : "Switch to dark mode";
+        _themeToggle.Click += (_, _) => ChangeTheme(AppTheme.IsDark ? "Light" : "Dark");
+        side.Controls.Add(_themeToggle);
         return side;
     }
 

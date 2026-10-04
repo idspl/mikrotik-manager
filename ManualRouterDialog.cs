@@ -1,6 +1,6 @@
 namespace MikroTikManager;
 
-public sealed class ManualRouterDialog : Form
+public sealed class ManualRouterDialog : DpiDialog
 {
     private readonly TextBox _name = new() { Width = 280 };
     private readonly TextBox _group = new() { Width = 220, MaxLength = 80, PlaceholderText = "Optional upgrade group" };

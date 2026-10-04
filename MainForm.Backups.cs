@@ -103,7 +103,7 @@ public sealed partial class MainForm
             finally { if (!dialog.IsDisposed) bar.Enabled = true; }
         });
         reveal.CheckedChanged += (_, _) => Render();
-        grid.CellFormatting += (_, args) => { if (args.RowIndex < 0 || args.RowIndex >= diff.Count) return; args.CellStyle.BackColor = diff[args.RowIndex].Kind switch { "+" => Color.FromArgb(226, 245, 233), "−" => Color.FromArgb(255, 234, 234), _ => Color.White }; };
+        grid.CellFormatting += (_, args) => { if (args.RowIndex < 0 || args.RowIndex >= diff.Count) return; args.CellStyle.BackColor = diff[args.RowIndex].Kind switch { "+" => AppTheme.SuccessBack, "−" => AppTheme.FailureBack, _ => AppTheme.Surface }; };
         bar.Controls.AddRange([new Label { Text = "Before", AutoSize = true }, before, new Label { Text = "After", AutoSize = true }, after, compare, reveal]);
         dialog.Controls.Add(grid); dialog.Controls.Add(summary); dialog.Controls.Add(bar); dialog.ShowDialog(this);
     }

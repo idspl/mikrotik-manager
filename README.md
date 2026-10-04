@@ -1,4 +1,4 @@
-# MikroTik Manager 0.5.1
+# MikroTik Manager 0.5.2
 
 [![Windows build](https://github.com/idspl/mikrotik-manager/actions/workflows/windows-build.yml/badge.svg)](https://github.com/idspl/mikrotik-manager/actions/workflows/windows-build.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -36,6 +36,15 @@ MikroTik Manager is currently distributed without a paid Authenticode certificat
 Do not run the file if it came from another website, the checksum differs, VirusTotal reports multiple credible detections, or the release cannot be matched to this repository. A single generic or heuristic detection can be a false positive; investigate it rather than assuming either safety or infection.
 
 Use a test router before production deployment. Router upgrades, reboots and sensitive configuration exports can interrupt services or expose credentials if operated without appropriate controls.
+
+## 0.5.2 dark mode
+
+- Switch Light/Dark from the sidebar or Settings → Appearance; saved immediately and restored on startup.
+- Applies to dashboard, inventory, maintenance, backups, settings, logs, menus and application dialogs without resetting selection or scroll.
+- Status colours and export comparisons retain readable success/failure colours in both themes.
+- Windows-provided message boxes, file pickers, calendar popups, title bars and some native control borders/scrollbars continue to follow Windows appearance.
+- The branded splash screen remains dark in both modes. Existing installations retain Light until changed.
+- See [feature audit](FEATURE-AUDIT.md) for current coverage and candidate future work.
 
 ## 0.5.1 display scaling and layout corrections
 

@@ -66,6 +66,7 @@ public sealed partial class MainForm
             File.WriteAllText($"ui-{(int)(scale * 100)}-schedule-dialog.base64", Convert.ToBase64String(stream.ToArray()));
             dialog.Close();
         }
+        if (scale == 1.5F) VerifyThemeSwitch(Capture);
         Hide();
     }
     // Geometry + typography stress fixtures; these do not emulate monitor switching.

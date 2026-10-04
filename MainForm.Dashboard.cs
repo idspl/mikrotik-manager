@@ -103,10 +103,11 @@ public sealed partial class MainForm
         grid.CellFormatting += (_, e) => {
             if (e.ColumnIndex < 0 || grid.Columns[e.ColumnIndex].DataPropertyName is not ("ApiStatus" or "Result" or "State")) return;
             string state = e.Value?.ToString() ?? "";
-            if (state is "Online" or "Completed") { e.CellStyle.ForeColor = Color.FromArgb(24, 112, 73); e.CellStyle.BackColor = Color.FromArgb(231, 247, 238); }
-            else if (state.Contains("Failed", StringComparison.OrdinalIgnoreCase)) { e.CellStyle.ForeColor = Color.FromArgb(160, 36, 36); e.CellStyle.BackColor = Color.FromArgb(255, 235, 235); }
-            else if (state is "Running" or "Retrying") { e.CellStyle.ForeColor = Color.FromArgb(32, 83, 148); e.CellStyle.BackColor = Color.FromArgb(229, 239, 255); }
+            if (state is "Online" or "Completed") { e.CellStyle.ForeColor = AppTheme.SuccessText; e.CellStyle.BackColor = AppTheme.SuccessBack; }
+            else if (state.Contains("Failed", StringComparison.OrdinalIgnoreCase)) { e.CellStyle.ForeColor = AppTheme.FailureText; e.CellStyle.BackColor = AppTheme.FailureBack; }
+            else if (state is "Running" or "Retrying") { e.CellStyle.ForeColor = AppTheme.RunningText; e.CellStyle.BackColor = AppTheme.RunningBack; }
         };
+        AppTheme.ApplyGrid(grid);
         foreach (DataGridViewColumn column in grid.Columns)
             if (column.DataPropertyName.EndsWith("At") || column.DataPropertyName == nameof(UpgradeJob.ScheduledLocalTime)) column.DefaultCellStyle.Format = "dd MMM yyyy HH:mm";
     }
