@@ -1,6 +1,6 @@
 # Feature audit — 4 October 2026
 
-Compared the public [mikr.app roadmap](https://mikr.app/roadmap.html) with Indigo MikroTik Manager's source at v0.5.1, plus the dark-mode changes in v0.5.2. The reference lists 155 entries: 128 shipped, four planned and 23 ideas. These are that product's labels, not Indigo delivery commitments. Related entries are grouped below; no feature-parity percentage is claimed.
+Compared the public [mikr.app roadmap](https://mikr.app/roadmap.html) with Indigo MikroTik Manager's source at v0.5.1, plus the appearance changes through v0.5.3. The reference lists 155 entries: 128 shipped, four planned and 23 ideas. These are that product's labels, not Indigo delivery commitments. Related entries are grouped below; no feature-parity percentage is claimed.
 
 **Present** means our implementation provides the capability. **Partial** means our version is narrower. **Pending** means no implementation was found. Some differences are intentional: this is an API-only Windows application, not a shared web server.
 
@@ -24,7 +24,7 @@ Compared the public [mikr.app roadmap](https://mikr.app/roadmap.html) with Indig
 | Shared access | Not part of the current desktop architecture. | Roles/site permissions, central user audit, MFA/passkeys/directory login, a remotely callable manager API and its access keys would require a server design. Connecting to RouterOS API is not the same capability. |
 | Security analysis | Pending. | Vulnerability/release-security assessment, configuration-risk scanning, intrusion detection and automatic blocking. API connection errors are recorded, but there is no distinct network-reachable/management-unavailable state. |
 | Integrations | Pending. | External alerts/webhooks, metrics export and syslog ingestion. Live Log currently records this application's work, not the router fleet's syslog. |
-| Appearance | Present in v0.5.2: saved Light/Dark preference, immediate sidebar toggle, themed application views and dialogs. Existing installations remain Light until changed. | Native Windows chrome and system dialogs retain Windows appearance. No mobile/web client, localisation, dedicated feedback/changelog modal or global shortcut scheme. |
+| Appearance | Present through v0.5.3: saved Light/Dark preference in Settings, themed application views and dialogs. Dark is the default; saved theme choices are preserved. | Native Windows chrome and system dialogs retain Windows appearance. No mobile/web client, localisation, dedicated feedback/changelog modal or global shortcut scheme. |
 | Operation visibility | Partial: Maintenance page, aggregate stages, logs, reports and persisted interrupted-job/history handling. | No globally visible active-task drawer. Closing the app during an active interactive operation is prevented; it is not a browser-independent server session. |
 
 IPv6 management has not been validated end-to-end; generic hostname/address acceptance is not evidence of complete dual-stack parity.

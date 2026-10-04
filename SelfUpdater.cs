@@ -10,10 +10,10 @@ internal static class SelfUpdater
     internal const string InstanceName = @"Global\Indigo.MikroTikManager.Application";
     private const string Repository = "https://github.com/idspl/mikrotik-manager/";
 
-    public static async Task<string> DownloadAsync(string expectedVersion, CancellationToken ct)
+    public static async Task<string> DownloadAsync(string expectedVersion, CancellationToken ct, IProgress<string>? progress = null)
     {
         using var client = new HttpClient { Timeout = TimeSpan.FromMinutes(10) };
-        client.DefaultRequestHeaders.UserAgent.ParseAdd("MikroTikManager-Updater/0.5.2");
+        client.DefaultRequestHeaders.UserAgent.ParseAdd("MikroTikManager-Updater/0.5.3");
         string json = await client.GetStringAsync("https://api.github.com/repos/idspl/mikrotik-manager/releases/latest", ct);
         using var doc = JsonDocument.Parse(json);
         var root = doc.RootElement;
@@ -37,11 +37,37 @@ internal static class SelfUpdater
         string path = Path.Combine(directory, "MikroTikManager.exe");
         using var response = await client.GetAsync(Asset("MikroTikManager.exe"), HttpCompletionOption.ResponseHeadersRead, ct);
         response.EnsureSuccessStatusCode();
-        await using (var output = File.Create(path))
-        { await response.Content.CopyToAsync(output, ct); await output.FlushAsync(ct); }
+        await using (var output = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None,
+            131072, FileOptions.Asynchronous | FileOptions.SequentialScan))
+        await using (var input = await response.Content.ReadAsStreamAsync(ct))
+        {
+            long received = 0;
+            long? total = response.Content.Headers.ContentLength;
+            byte[] buffer = new byte[131072];
+            var clock = Stopwatch.StartNew();
+            long lastReport = -250;
+            int count;
+            while ((count = await input.ReadAsync(buffer.AsMemory(), ct)) != 0)
+            {
+                await output.WriteAsync(buffer.AsMemory(0, count), ct);
+                received += count;
+                if (clock.ElapsedMilliseconds - lastReport >= 250)
+                {
+                    double mib = received / 1048576d;
+                    string amount = total is > 0 ? $"{100d * received / total.Value:0}% ({mib:0.0} / {total.Value / 1048576d:0.0} MiB)" : $"{mib:0.0} MiB";
+                    progress?.Report($"Downloading update: {amount} — {mib / Math.Max(clock.Elapsed.TotalSeconds, 0.001):0.0} MiB/s");
+                    lastReport = clock.ElapsedMilliseconds;
+                }
+            }
+            await output.FlushAsync(ct);
+            if (total.HasValue && received != total.Value)
+                throw new IOException("The update download was incomplete. Please try again.");
+        }
+        progress?.Report("Download complete. Verifying SHA-256 checksum...");
         if (!Hash(path).Equals(hash, StringComparison.OrdinalIgnoreCase))
             throw new InvalidOperationException("Checksum mismatch. The downloaded executable will not be installed.");
         // Helper is the currently running (known) build, not unverified code fetched separately.
+        progress?.Report("Checksum verified. Preparing update helper...");
         File.Copy(Environment.ProcessPath!, Path.Combine(directory, "UpdateHelper.exe"));
         return path;
     }

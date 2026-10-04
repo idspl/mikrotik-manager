@@ -8,6 +8,7 @@ public sealed partial class MainForm
         int scroll = _routerGrid.FirstDisplayedScrollingRowIndex;
         var selected = _routerGrid.SelectedRows.Cast<DataGridViewRow>().Select(r => r.Index).ToArray();
         var before = _store.LoadSettings();
+        ChangeTheme("Light");
         ChangeTheme("Dark");
         var after = _store.LoadSettings();
         if (!AppTheme.IsDark || after.Theme != "Dark" || after.DefaultApiPort != before.DefaultApiPort || after.UseApiSsl != before.UseApiSsl)

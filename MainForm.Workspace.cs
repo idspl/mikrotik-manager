@@ -81,10 +81,7 @@ public sealed partial class MainForm
         void Highlight() { foreach (var item in buttons) item.Button.BackColor = item.Page == _tabs.SelectedTab ? Color.FromArgb(45, 99, 170) : side.BackColor; }
         _tabs.SelectedIndexChanged += (_, _) => Highlight(); Highlight();
         scroll.Controls.Add(list); side.Controls.Add(scroll);
-        side.Controls.Add(new Label { Text = "Made for MikroTik\nv0.5.2 • Open source", Dock = DockStyle.Bottom, AutoSize = true, ForeColor = Color.LightSteelBlue, Padding = new Padding(4, 8, 0, 0) });
-        _themeToggle.Text = AppTheme.IsDark ? "Switch to light mode" : "Switch to dark mode";
-        _themeToggle.Click += (_, _) => ChangeTheme(AppTheme.IsDark ? "Light" : "Dark");
-        side.Controls.Add(_themeToggle);
+        side.Controls.Add(new Label { Text = "Made for MikroTik\nv0.5.3 • Open source", Dock = DockStyle.Bottom, AutoSize = true, ForeColor = Color.LightSteelBlue, Padding = new Padding(4, 8, 0, 0) });
         return side;
     }
 
