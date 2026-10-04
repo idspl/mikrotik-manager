@@ -8,6 +8,13 @@ public sealed class RouterRecord
     public string Site { get; set; } = "";
     public string Tags { get; set; } = "";
     public DateTime? LastSeenAt { get; set; }
+    public DeviceHealth? Health { get; set; }
+    public DateTime? LastHealthCheckAt { get; set; }
+    public string LastHealthError { get; set; } = "";
+    [System.Text.Json.Serialization.JsonIgnore] public bool HealthObservedThisSession { get; set; }
+    public string BackupChange { get; set; } = "No baseline";
+    public DateTime? BackupChangeAt { get; set; }
+    public string LastBackupFolder { get; set; } = "";
     public DateTime? LastBackupAttemptAt { get; set; }
     public string LastBackupError { get; set; } = "";
     public string Host { get; set; } = "";
@@ -54,6 +61,7 @@ public sealed class UpgradeJob
     public string LastRunResult { get; set; } = "";
     public bool LastRunSuccessful { get; set; }
     public int MaxConcurrency { get; set; } = 1;
+    public string TypeLabel => Kind == ScheduledJobKind.Backup ? "Backup only" : "Backup + upgrade";
     public int EffectiveMaxConcurrency => Kind == ScheduledJobKind.Backup ? 0 : MaxConcurrency;
     public int FailureLimit { get; set; }
 }
@@ -97,6 +105,7 @@ public sealed class AppSettings
     public bool CheckForUpdatesAtStartup { get; set; } = true;
     public bool RefreshRoutersAtStartup { get; set; } = true;
     public int InterfaceRecoverySeconds { get; set; } = 60;
+    public int HealthPollMinutes { get; set; } = 0;
 }
 
 public sealed record ApiReply(string Type, IReadOnlyDictionary<string, string> Attributes);

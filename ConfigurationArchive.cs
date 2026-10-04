@@ -47,6 +47,7 @@ internal static class ConfigurationArchive
                 || bundle.Settings.ConnectTimeoutSeconds is < 3 or > 120
                 || bundle.Settings.ReconnectTimeoutMinutes is < 1 or > 120
                 || bundle.Settings.StableOnlineSeconds is < 0 or > 300
+                || bundle.Settings.HealthPollMinutes is < 0 or > 1440
                 || bundle.Settings.InterfaceRecoverySeconds is < 0 or > 600
                 || bundle.Settings.RetryCount is < 0 or > 5
                 || bundle.Settings.MinimumFreeDiskMb is < 0 or > 65535

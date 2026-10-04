@@ -64,7 +64,7 @@ public sealed partial class MainForm
 
     private Control BuildNavigation()
     {
-        var side = new Panel { Name = "Navigation", Dock = DockStyle.Left, Width = 180, BackColor = Color.FromArgb(23, 39, 62), Padding = new Padding(12) };
+        var side = new Panel { Name = "Navigation", Dock = DockStyle.Left, Width = 200, BackColor = Color.FromArgb(23, 39, 62), Padding = new Padding(12) };
         var scroll = new Panel { Dock = DockStyle.Fill, AutoScroll = true };
         var list = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 1, Padding = Padding.Empty, Margin = Padding.Empty };
         list.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
@@ -73,15 +73,15 @@ public sealed partial class MainForm
         foreach (TabPage page in _tabs.TabPages)
         {
             string title = page.Text == "Maintenance Progress" ? "Maintenance" : page.Text;
-            var button = new Button { Text = title, Dock = DockStyle.Fill, AutoSize = true, MinimumSize = new Size(0, 42), FlatStyle = FlatStyle.Flat, TextAlign = ContentAlignment.MiddleLeft,
-                Padding = new Padding(8, 8, 8, 8), ForeColor = Color.White, BackColor = side.BackColor, Margin = new Padding(0, 3, 0, 3), Cursor = Cursors.Hand };
+            var button = new NavigationButton { Section = page.Text, Text = title, Dock = DockStyle.Fill, AutoSize = true, MinimumSize = new Size(0, 42), FlatStyle = FlatStyle.Flat, TextAlign = ContentAlignment.MiddleLeft,
+                Padding = new Padding(34, 8, 8, 8), ForeColor = Color.White, BackColor = side.BackColor, Margin = new Padding(0, 3, 0, 3), Cursor = Cursors.Hand };
             button.FlatAppearance.BorderSize = 0; button.Click += (_, _) => _tabs.SelectedTab = page;
             list.Controls.Add(button); buttons.Add((button, page));
         }
         void Highlight() { foreach (var item in buttons) item.Button.BackColor = item.Page == _tabs.SelectedTab ? Color.FromArgb(45, 99, 170) : side.BackColor; }
         _tabs.SelectedIndexChanged += (_, _) => Highlight(); Highlight();
         scroll.Controls.Add(list); side.Controls.Add(scroll);
-        side.Controls.Add(new Label { Text = "Made for MikroTik\nv0.5.5 • Open source", Dock = DockStyle.Bottom, AutoSize = true, ForeColor = Color.LightSteelBlue, Padding = new Padding(4, 8, 0, 0) });
+        side.Controls.Add(new Label { Text = "Made for MikroTik\nv0.6.0 • Open source", Dock = DockStyle.Bottom, AutoSize = true, ForeColor = Color.LightSteelBlue, Padding = new Padding(4, 8, 0, 0) });
         return side;
     }
 

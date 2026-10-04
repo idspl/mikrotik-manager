@@ -40,7 +40,7 @@ public sealed partial class MainForm : Form
         _store = store ?? new SecureStore();
         AppTheme.Set(_store.LoadSettings().Theme);
         _routerContextMenu = new ContextMenuStrip(_components);
-        Text = "MikroTik Manager 0.5.5";
+        Text = "MikroTik Manager 0.6.0";
         Font = new Font("Segoe UI", 9F);
         Icon = AppIcon.Current;
         Width = 1440;
@@ -80,7 +80,7 @@ public sealed partial class MainForm : Form
             if (_store.LoadSettings().CheckForUpdatesAtStartup) await CheckForUpdatesAsync(false);
             if (!IsDisposed && _store.LoadSettings().RefreshRoutersAtStartup && !_operationInProgress)
                 await FetchVersionsAsync(_routers.ToList());
-            if (!IsDisposed) StartScheduleMonitor();
+            if (!IsDisposed) { StartScheduleMonitor(); StartHealthMonitor(); }
         };
     }
 
@@ -95,6 +95,7 @@ public sealed partial class MainForm : Form
         tabs.TabPages.Add(_maintenancePage);
         _schedulesPage = BuildSchedulesPage();
         tabs.TabPages.Add(_schedulesPage);
+        tabs.TabPages.Add(BuildHealthPage());
         tabs.TabPages.Add(BuildBackupsPage());
         tabs.TabPages.Add(BuildLogsPage());
         tabs.TabPages.Add(BuildSettingsPage());
@@ -188,8 +189,8 @@ public sealed partial class MainForm : Form
         var updatesMenu = new ToolStripDropDownButton("Help") { Alignment = ToolStripItemAlignment.Right };
         updatesMenu.DropDownItems.Add("Check for Updates", null, async (_, _) => await CheckForUpdatesAsync(true));
         updatesMenu.DropDownItems.Add(new ToolStripSeparator());
-        updatesMenu.DropDownItems.Add("About MikroTik Manager 0.5.5", null, (_, _) =>
-            MessageBox.Show("MikroTik Manager 0.5.5\n\nMade for MikroTik\nIndependent open-source software by Indigo Data Services Pvt Ltd.", Text,
+        updatesMenu.DropDownItems.Add("About MikroTik Manager 0.6.0", null, (_, _) =>
+            MessageBox.Show("MikroTik Manager 0.6.0\n\nMade for MikroTik\nIndependent open-source software by Indigo Data Services Pvt Ltd.", Text,
                 MessageBoxButtons.OK, MessageBoxIcon.Information));
         actions.Items.AddRange([inventoryMenu, selectionMenu, groupMenu, maintenanceMenu, upgradeMenu, updatesMenu]);
 
@@ -349,7 +350,7 @@ public sealed partial class MainForm : Form
         _jobGrid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
         _jobGrid.MultiSelect = false;
         _jobGrid.Columns.Add(TextColumn(nameof(UpgradeJob.Name), "Job", 180, true));
-        _jobGrid.Columns.Add(TextColumn(nameof(UpgradeJob.Kind), "Type", 80, true));
+        _jobGrid.Columns.Add(TextColumn(nameof(UpgradeJob.TypeLabel), "Job type", 150, true));
         _jobGrid.Columns.Add(TextColumn(nameof(UpgradeJob.EffectiveMaxConcurrency), "Concurrent (0=all)", 120, true));
         _jobGrid.Columns.Add(TextColumn(nameof(UpgradeJob.Recurrence), "Repeat", 80, true));
         _jobGrid.Columns.Add(TextColumn(nameof(UpgradeJob.ScheduledLocalTime), "Next / planned run", 150, true));
@@ -398,6 +399,7 @@ public sealed partial class MainForm : Form
         var updateChecks = new CheckBox { Checked = current.CheckForUpdatesAtStartup, Text = "Check GitHub releases at startup", AutoSize = true };
         var refreshRouters = new CheckBox { Checked = current.RefreshRoutersAtStartup, Text = "Check API and versions at startup", AutoSize = true };
         var interfaceWait = Numeric(current.InterfaceRecoverySeconds, 0, 600);
+        var healthPoll = Numeric(current.HealthPollMinutes, 0, 1440);
         var channel = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 180 };
         channel.Items.AddRange(["stable", "long-term", "testing", "development"]);
         channel.SelectedItem = current.UpdateChannel;
@@ -418,6 +420,7 @@ public sealed partial class MainForm : Form
         AddRow(panel, "Default retry count", retries);
         AddRow(panel, "Application updates", updateChecks);
         AddRow(panel, "Router status refresh", refreshRouters);
+        AddRow(panel, "Health interval (minutes; 0 = off)", healthPoll);
         AddRow(panel, "Critical interface recovery (seconds)", interfaceWait);
         page.AutoScroll = true;
         AddRow(panel, "RouterOS update channel", channel);
@@ -445,7 +448,8 @@ public sealed partial class MainForm : Form
                 RetryCount = (int)retries.Value,
                 CheckForUpdatesAtStartup = updateChecks.Checked,
                 RefreshRoutersAtStartup = refreshRouters.Checked,
-                InterfaceRecoverySeconds = (int)interfaceWait.Value
+                InterfaceRecoverySeconds = (int)interfaceWait.Value,
+                HealthPollMinutes = (int)healthPoll.Value
             };
             _store.SaveSettings(value);
             _failureBehavior.SelectedItem = value.DefaultFailureBehavior;
@@ -914,6 +918,7 @@ public sealed partial class MainForm : Form
         if (_operationInProgress || _updateInProgress) return;
         if (selected.Count == 0) { MessageBox.Show("Select at least one router."); return; }
         using var dialog = new BackupFolderDialog();
+        dialog.Text = $"Backup only — {selected.Count} selected devices";
         if (dialog.ShowDialog(this) != DialogResult.OK) return;
 
         SetBusy(true, $"Backing up {selected.Count} selected router(s) through the API...");
