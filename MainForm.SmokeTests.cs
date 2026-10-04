@@ -33,6 +33,10 @@ public sealed partial class MainForm
                 throw new Exception("Dashboard card overlaps at " + scale);
         }
         Capture("dashboard");
+        _tabs.SelectedTab = _healthPage;
+        _routers[0].Health = new DeviceHealth(DateTime.Now, 23, 67108864, 268435456, 67108864, 134217728, "4d 03:12:00", "cpu-temperature: 42 °C");
+        _routers[0].LastHealthCheckAt = DateTime.Now; _routers[0].HealthObservedThisSession = true;
+        RefreshHealthView(); Capture("health");
         _tabs.SelectedTab = _routerPage; _routerGrid.ClearSelection(); _routerGrid.Rows[20].Selected = true;
         _routerGrid.FirstDisplayedScrollingRowIndex = 12;
         int scroll = _routerGrid.FirstDisplayedScrollingRowIndex;

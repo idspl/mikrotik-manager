@@ -6,13 +6,17 @@ public sealed partial class MainForm
     {
         var selected = SelectedRouters();
         if (selected.Count != 1) { MessageBox.Show("Select one device to open its details."); return; }
-        var router = selected[0];
+        ShowDeviceDetails(selected[0]);
+    }
+
+    private void ShowDeviceDetails(RouterRecord router)
+    {
         using var dialog = new DpiDialog { Text = router.Name + " — Device Details", Width = 1060, Height = 740, MinimumSize = new Size(760, 520), StartPosition = FormStartPosition.CenterParent, Font = Font };
         using var cancellation = new CancellationTokenSource();
         var tabs = new TabControl { Dock = DockStyle.Fill };
         TabPage overview = new TabPage("Overview"), interfaces = new TabPage("Interfaces"), versions = new TabPage("Versions"), backups = new TabPage("Backup History");
         tabs.TabPages.AddRange([overview, interfaces, versions, backups]);
-        var metrics = new ListView { Dock = DockStyle.Fill, View = View.Details, FullRowSelect = true }; metrics.Columns.Add("Property", 250); metrics.Columns.Add("Value", 650); overview.Controls.Add(metrics);
+        var metrics = new SmoothGrid { Dock = DockStyle.Fill }; ConfigureDashboardGrid(metrics, ["Property", "Value"]); overview.Controls.Add(metrics);
         var versionText = new Label { Dock = DockStyle.Fill, Padding = new Padding(24), Text = $"Saved RouterOS: {router.RouterOsVersion}\n\nSaved firmware: {router.FirmwareVersion}\n\nUpgrade channel: {RouterChannels.Resolve(router, _store.LoadSettings())}\n\nLast version check: {router.LastCheckedAt:g}", Font = new Font("Segoe UI", 12) }; versions.Controls.Add(versionText);
         var history = new SmoothGrid { Dock = DockStyle.Fill, ReadOnly = true, AllowUserToAddRows = false, DataSource = router.Backups.OrderByDescending(b => b.CreatedAt).ToList(), AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.DisplayedCells }; StyleGrid(history); backups.Controls.Add(history);
         var ports = new SmoothGrid { Dock = DockStyle.Fill, ReadOnly = true, AllowUserToAddRows = false, SelectionMode = DataGridViewSelectionMode.FullRowSelect, MultiSelect = false, AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill }; StyleGrid(ports);
@@ -38,7 +42,7 @@ public sealed partial class MainForm
                     foreach (string key in new[] { "board-name", "architecture-name", "cpu-load", "free-memory", "total-memory", "free-hdd-space", "total-hdd-space", "uptime", "version" }) fields.Add([key, resource.GetValueOrDefault(key) ?? "Unavailable"]);
                     try { foreach (var b in await Read("/system/routerboard/print")) foreach (string key in new[] { "model", "serial-number", "current-firmware", "upgrade-firmware" }) fields.Add([key, b.GetValueOrDefault(key) ?? "Unavailable"]); } catch (RouterOsApiException) { fields.Add(["RouterBOARD", "Unavailable / permission denied"]); }
                     try { foreach (var h in await Read("/system/health/print")) { if (h.TryGetValue("name", out var name)) fields.Add([name, h.GetValueOrDefault("value") + " " + h.GetValueOrDefault("type")]); else foreach (var pair in h.Where(p => p.Key != ".id")) fields.Add([pair.Key, pair.Value]); } } catch (RouterOsApiException) { fields.Add(["Health sensors", "Unavailable / permission denied"]); }
-                    var list = (await Read("/interface/print")).Select(p => new PortDetail(p.GetValueOrDefault("name") ?? "", p.GetValueOrDefault("type") ?? "", p.GetValueOrDefault("running") == "true" ? "Up" : "Down", p.GetValueOrDefault("disabled") == "true" ? "Disabled" : "Enabled", p.GetValueOrDefault("rx-byte") ?? "—", p.GetValueOrDefault("tx-byte") ?? "—", p.GetValueOrDefault("comment") ?? "")).ToList();
+                    var list = (await api.ExecuteAsync("/interface/print", cancellation.Token, "stats=")).Where(r => r.Type == "!re").Select(r => r.Attributes).Select(p => new PortDetail(p.GetValueOrDefault("name") ?? "", p.GetValueOrDefault("type") ?? "", p.GetValueOrDefault("running") == "true" ? "Up" : "Down", p.GetValueOrDefault("disabled") == "true" ? "Disabled" : "Enabled", p.GetValueOrDefault("rx-byte") ?? "—", p.GetValueOrDefault("tx-byte") ?? "—", p.GetValueOrDefault("rx-error") ?? "Unavailable", p.GetValueOrDefault("tx-error") ?? "Unavailable", p.GetValueOrDefault("tx-queue-drop") ?? "Unavailable", p.GetValueOrDefault("comment") ?? "")).ToList();
                     return (fields, list);
                 }, cancellation.Token);
                 if (dialog.IsDisposed) return;
@@ -75,5 +79,5 @@ public sealed partial class MainForm
         dialog.Shown += async (_, _) => await RefreshAsync();
         dialog.ShowDialog(this);
     }
-    private sealed record PortDetail(string Name, string Type, string Link, string State, string RxBytes, string TxBytes, string Comment);
+    private sealed record PortDetail(string Name, string Type, string Link, string State, string RxBytes, string TxBytes, string RxErrors, string TxErrors, string QueueDrops, string Comment);
 }

@@ -42,3 +42,7 @@ Only dark mode is included in v0.5.2. The items above are candidates, not implem
 ## Source verification
 
 Inventory/UI: `MainForm.cs`, `MainForm.Workspace.cs`, `MainForm.Inventory.cs`, `ManualRouterDialog.cs`. Device reads: `MainForm.DeviceDetails.cs`. Maintenance: `UpgradeEngine.cs`, `BatchUpgradeQueue.cs`, `MainForm.Maintenance.cs`, `MainForm.Rollout.cs`. Scheduling: `BackupSchedulePolicy.cs`, `MainForm.BackupSchedules.cs`, `MainForm.ScheduleActions.cs`. Backup handling: `RouterBackupService.cs`, `MainForm.Backups.cs`, `ConfigDiff.cs`. Protection/transport: `SecureStore.cs`, `ConfigurationArchive.cs`, `RouterOsApiClient.cs`. Appearance: `AppTheme.cs`, `MainForm.Theme.cs`, `DpiDialog.cs`.
+
+## v0.6.0 update
+
+Implemented opt-in periodic resource polling with bounded concurrency and freshness labels; a fleet Health page; RX/TX error counters in existing interface diagnostics; post-backup configuration-change detection; retry-failed and open-folder backup actions; explicit job type labels; full-width dark dashboard headers and navigation icons. Historical trends, topology/neighbour/bridge/VLAN/MAC tools, external notifications and other unlisted candidates remain pending.

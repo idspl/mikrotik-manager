@@ -5,8 +5,8 @@ public sealed partial class MainForm
     private TabPage _dashboardPage = null!, _routerPage = null!, _schedulesPage = null!;
     private readonly Dictionary<string, Label> _dashboardCounts = [];
     private readonly Label _dashboardNote = new() { AutoSize = true, MaximumSize = new Size(1030, 0), ForeColor = Color.DimGray, Margin = new Padding(8, 10, 8, 16) };
-    private readonly ListView _dashboardJobs = new() { View = View.Details, FullRowSelect = true, Height = 210, Width = 1060 };
-    private readonly ListView _dashboardGroups = new() { View = View.Details, FullRowSelect = true, Height = 185, Width = 1060 };
+    private readonly SmoothGrid _dashboardJobs = new() { Height = 210, Width = 1060 };
+    private readonly SmoothGrid _dashboardGroups = new() { Height = 185, Width = 1060 };
 
     private TabPage BuildDashboardPage()
     {
@@ -31,15 +31,14 @@ public sealed partial class MainForm
         actions.Controls.Add(Button("Open Inventory", (_, _) => _tabs.SelectedTab = _routerPage));
         actions.Controls.Add(Button("Refresh All Router Versions", async (_, _) => { if (!_operationInProgress && !_updateInProgress) await FetchVersionsAsync(_routers.ToList()); RefreshDashboard(); }));
         actions.Controls.Add(Button("Manage Schedules", (_, _) => _tabs.SelectedTab = _schedulesPage));
+        actions.Controls.Add(Button("Device Health", (_, _) => { _tabs.SelectedTab = _healthPage; RefreshHealthView(); }));
         layout.Controls.Add(actions);
         layout.Controls.Add(new Label { Text = "Schedules — double-click to manage", AutoSize = true, Font = new Font("Segoe UI", 11, FontStyle.Bold) });
-        _dashboardJobs.Columns.Add("Job", 230); _dashboardJobs.Columns.Add("Type / repeat", 135);
-        _dashboardJobs.Columns.Add("Next / planned run", 155); _dashboardJobs.Columns.Add("State", 160); _dashboardJobs.Columns.Add("Last result", 350);
+        ConfigureDashboardGrid(_dashboardJobs, ["Job", "Job type / repeat", "Next / planned run", "State", "Last result"]);
         _dashboardJobs.DoubleClick += (_, _) => _tabs.SelectedTab = _schedulesPage;
         layout.Controls.Add(_dashboardJobs);
         layout.Controls.Add(new Label { Text = "Upgrade groups", AutoSize = true, Font = new Font("Segoe UI", 11, FontStyle.Bold), Margin = new Padding(3, 16, 3, 4) });
-        _dashboardGroups.Columns.Add("Group", 330); _dashboardGroups.Columns.Add("Routers", 120);
-        _dashboardGroups.Columns.Add("API online", 140); _dashboardGroups.Columns.Add("Backup >7d / never", 210);
+        ConfigureDashboardGrid(_dashboardGroups, ["Group", "Routers", "API online", "Backup >7d / never"]);
         layout.Controls.Add(_dashboardGroups);
         var notice = new Label { Text = "Made for MikroTik • Independent software by Indigo Data Services. MikroTik trademarks belong to MikroTikls SIA.", AutoSize = true, ForeColor = Color.DimGray, Margin = new Padding(3, 16, 3, 16) };
         layout.Controls.Add(notice);
@@ -73,10 +72,30 @@ public sealed partial class MainForm
         }).ToString();
         _dashboardNote.Text = "Last-known observations; refresh to verify live status. Update count compares the same RouterOS major version by router channel (excludes development).";
         ReplaceItems(_dashboardJobs, _jobs.OrderBy(j => j.State == "Scheduled" ? 0 : 1).ThenBy(j => j.ScheduledLocalTime)
-            .Select(j => new[] { j.Name, j.Kind + " / " + j.Recurrence, j.ScheduledLocalTime.ToString("dd MMM yyyy HH:mm"),
+            .Select(j => new[] { j.Name, j.TypeLabel + " / " + j.Recurrence, j.ScheduledLocalTime.ToString("dd MMM yyyy HH:mm"),
                 j.State == "Scheduled" && j.ScheduledLocalTime <= DateTime.Now ? "Due / awaiting runner" : j.State, j.LastRunResult }).ToArray());
         ReplaceItems(_dashboardGroups, _routers.GroupBy(r => string.IsNullOrWhiteSpace(r.Group) ? "Ungrouped" : r.Group)
             .OrderBy(g => g.Key).Select(g => new[] { g.Key, g.Count().ToString(), g.Count(r => r.ApiStatus == "Online").ToString(), g.Count(NeedsBackup).ToString() }).ToArray());
+    }
+
+    private static void ConfigureDashboardGrid(SmoothGrid grid, string[] headings)
+    {
+        grid.ReadOnly = true; grid.AllowUserToAddRows = false; grid.AllowUserToDeleteRows = false;
+        grid.MultiSelect = false; grid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
+        grid.AutoGenerateColumns = false; grid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
+        for (int i = 0; i < headings.Length; i++) grid.Columns.Add(new DataGridViewTextBoxColumn {
+            Name = "C" + i, DataPropertyName = "C" + i, HeaderText = headings[i], MinimumWidth = i == 0 ? 160 : 130,
+            FillWeight = i == 0 || i == headings.Length - 1 ? 160 : 100 });
+        StyleGrid(grid);
+    }
+    private static void ReplaceItems(SmoothGrid grid, string[][] rows)
+    {
+        string signature = System.Text.Json.JsonSerializer.Serialize(rows);
+        if (grid.Tag is string previous && previous == signature) return;
+        var table = new System.Data.DataTable();
+        for (int i = 0; i < grid.Columns.Count; i++) table.Columns.Add("C" + i);
+        foreach (var row in rows) table.Rows.Add(row);
+        grid.DataSource = table; grid.Tag = signature; grid.ClearSelection();
     }
 
     private static void ReplaceItems(ListView view, string[][] rows)
@@ -101,11 +120,11 @@ public sealed partial class MainForm
         grid.DefaultCellStyle.SelectionBackColor = Color.FromArgb(218, 233, 250);
         grid.DefaultCellStyle.SelectionForeColor = Color.FromArgb(20, 40, 65);
         grid.CellFormatting += (_, e) => {
-            if (e.ColumnIndex < 0 || grid.Columns[e.ColumnIndex].DataPropertyName is not ("ApiStatus" or "Result" or "State")) return;
+            if (e.ColumnIndex < 0 || grid.Columns[e.ColumnIndex].DataPropertyName is not ("ApiStatus" or "Result" or "State" or "Status" or "Change")) return;
             string state = e.Value?.ToString() ?? "";
             if (state is "Online" or "Completed") { e.CellStyle.ForeColor = AppTheme.SuccessText; e.CellStyle.BackColor = AppTheme.SuccessBack; }
-            else if (state.Contains("Failed", StringComparison.OrdinalIgnoreCase)) { e.CellStyle.ForeColor = AppTheme.FailureText; e.CellStyle.BackColor = AppTheme.FailureBack; }
-            else if (state is "Running" or "Retrying") { e.CellStyle.ForeColor = AppTheme.RunningText; e.CellStyle.BackColor = AppTheme.RunningBack; }
+            else if (state == "Offline" || state.Contains("Failed", StringComparison.OrdinalIgnoreCase)) { e.CellStyle.ForeColor = AppTheme.FailureText; e.CellStyle.BackColor = AppTheme.FailureBack; }
+            else if (state is "Running" or "Retrying" or "Changed") { e.CellStyle.ForeColor = AppTheme.RunningText; e.CellStyle.BackColor = AppTheme.RunningBack; }
         };
         AppTheme.ApplyGrid(grid);
         foreach (DataGridViewColumn column in grid.Columns)

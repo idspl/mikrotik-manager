@@ -1,4 +1,4 @@
-# MikroTik Manager 0.5.5
+# MikroTik Manager 0.6.0
 
 [![Windows build](https://github.com/idspl/mikrotik-manager/actions/workflows/windows-build.yml/badge.svg)](https://github.com/idspl/mikrotik-manager/actions/workflows/windows-build.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -36,6 +36,16 @@ MikroTik Manager is currently distributed without a paid Authenticode certificat
 Do not run the file if it came from another website, the checksum differs, VirusTotal reports multiple credible detections, or the release cannot be matched to this repository. A single generic or heuristic detection can be a false positive; investigate it rather than assuming either safety or infection.
 
 Use a test router before production deployment. Router upgrades, reboots and sensitive configuration exports can interrupt services or expose credentials if operated without appropriate controls.
+
+## 0.6.0 health monitoring and backup usability
+
+- New Health page: CPU, memory use, free storage, uptime, supported temperature sensors, Online/Offline/Stale status, last check and reading timestamps. Failed checks retain the old reading with its original timestamp.
+- Settings → Health interval enables periodic polling while the app is open (0 = off, default). At most eight devices are checked concurrently; checks are bounded and deferred during maintenance, updates, dialogs and due schedules. This is desktop polling, not a Windows monitoring service; no retained time-series charts yet.
+- Device / Interfaces adds RX/TX error and queue-drop counters to existing link, traffic, speed and optical diagnostics. Unsupported sensors/counters show Unavailable.
+- Backups adds Retry Failed Backups (selected failures, or all recorded failures if nothing is selected), Open Backup Folder, Select Changed and configuration-change indicators. Changes compare the last two exports after each successful new backup, ignoring the export timestamp; comparison is limited to 4 MiB per file. Existing histories acquire indicators on their next backup. Compare Exports keeps content hidden unless explicitly revealed.
+- Job labels and confirmations distinguish Backup only from Backup + upgrade. Existing jobs retain their actual type: a backup-like name does not convert an upgrade job. Upgrade safety backups remain on-router; Backup only downloads local files.
+- Dashboard tables now use themed grids across their full width, removing the white trailing header areas. Navigation has consistent line icons and more spacing; light/dark appearance remains in Settings.
+- Device data is read via RouterOS API only. No SSH, Winbox-port automation, PPPoE-specific requirement or native macOS build.
 
 ## 0.5.5 backup selection and maintenance controls
 

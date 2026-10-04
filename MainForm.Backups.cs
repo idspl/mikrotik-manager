@@ -6,7 +6,7 @@ public sealed partial class MainForm
     private readonly Label _backupCoverage = new() { Dock = DockStyle.Top, AutoSize = false, Padding = new Padding(15), Text = "Refresh coverage to check local backup files and schedules." };
     private bool _readingCoverage;
     private readonly Label _backupSelection = new() { AutoSize = true, Padding = new Padding(8, 8, 0, 0), Text = "0 selected • Ctrl-click or Shift-click rows" };
-    private sealed record BackupCoverageRow(Guid Id, string Device, string Site, string Coverage, DateTime? LastBackup, DateTime? LastAttempt, string Error);
+    private sealed record BackupCoverageRow(Guid Id, string Device, string Site, string Coverage, DateTime? LastBackup, DateTime? LastAttempt, string Error, string Change, DateTime? ComparedAt);
 
     private TabPage BuildBackupsPage()
     {
@@ -21,6 +21,17 @@ public sealed partial class MainForm
             ShowBackupHistory(selected);
         }));
         bar.Controls.Add(Button("Backup Selected Devices", async (_, _) => await BackupRoutersAsync(SelectedBackupRouters())));
+        bar.Controls.Add(Button("Retry Failed Backups", async (_, _) => {
+            var selection = SelectedBackupRouters();
+            var failed = (selection.Count == 0 ? _routers.ToList() : selection).Where(r => r.LastBackupError.Length > 0 && r.LastBackupError != "Cancelled").ToList();
+            if (failed.Count == 0) { MessageBox.Show("No failed backups in the selection. Clear selection to retry all devices with a recorded backup failure."); return; }
+            await BackupRoutersAsync(failed);
+        }));
+        bar.Controls.Add(Button("Open Backup Folder", (_, _) => OpenSelectedBackupFolder()));
+        bar.Controls.Add(Button("Select Changed", (_, _) => {
+            _backupGrid.ClearSelection();
+            foreach (DataGridViewRow row in _backupGrid.Rows) if (row.DataBoundItem is BackupCoverageRow item && item.Change == "Changed") row.Selected = true;
+        }));
         bar.Controls.Add(Button("Select All", (_, _) => _backupGrid.SelectAll()));
         bar.Controls.Add(Button("Clear Selection", (_, _) => _backupGrid.ClearSelection()));
         bar.Controls.Add(Button("Manage Schedules", (_, _) => _tabs.SelectedTab = _schedulesPage));
@@ -42,6 +53,18 @@ public sealed partial class MainForm
         _tabs.SelectedIndexChanged += async (_, _) => { if (_tabs.SelectedTab == page) await RefreshBackupCoverageAsync(); };
         return page;
     }
+    private void OpenSelectedBackupFolder()
+    {
+        var selected = SelectedBackupRouters();
+        if (selected.Count != 1) { MessageBox.Show("Select one device to open its latest backup folder."); return; }
+        var router = selected[0];
+        string folder = router.LastBackupFolder;
+        if (string.IsNullOrEmpty(folder)) folder = (router.Backups.LastOrDefault() is BackupHistoryEntry backup ? Path.GetDirectoryName(backup.BackupPath) : "") ?? "";
+        if (!Directory.Exists(folder)) { MessageBox.Show("The backup folder is unavailable on this computer."); return; }
+        try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("explorer.exe", folder) { UseShellExecute = true }); }
+        catch (Exception ex) { ShowError(ex); }
+    }
+
     private List<RouterRecord> SelectedBackupRouters()
     {
         var ids = _backupGrid.SelectedRows.Cast<DataGridViewRow>().OrderBy(row => row.Index)
@@ -54,7 +77,7 @@ public sealed partial class MainForm
         try
         {
             // Snapshot mutable inventory on the UI thread; file probes run in the background.
-            var snapshots = _routers.Select(r => new { r.Id, r.Name, r.Site, Last = r.Backups.LastOrDefault(), r.LastBackupAttemptAt, r.LastBackupError }).ToList();
+            var snapshots = _routers.Select(r => new { r.Id, r.Name, r.Site, Last = r.Backups.LastOrDefault(), r.LastBackupAttemptAt, r.LastBackupError, r.BackupChange, r.BackupChangeAt }).ToList();
             var schedules = _jobs.Where(j => j.Kind == ScheduledJobKind.Backup && j.State is "Scheduled" or "Running").Select(j => new { Ids = j.RouterIds.ToArray(), j.ScheduledLocalTime, j.State }).ToList();
             var rows = await Task.Run(() => snapshots.Select(r => {
                 var issues = new List<string>(); var jobs = schedules.Where(j => j.Ids.Contains(r.Id)).ToList();
@@ -63,7 +86,7 @@ public sealed partial class MainForm
                 if (jobs.Count == 0) issues.Add("No active schedule");
                 if (jobs.Any(j => j.State == "Scheduled" && j.ScheduledLocalTime < DateTime.Now)) issues.Add("Overdue");
                 if (!string.IsNullOrEmpty(r.LastBackupError)) issues.Add("Last backup failed");
-                return new BackupCoverageRow(r.Id, r.Name, r.Site, issues.Count == 0 ? "Covered" : string.Join("; ", issues), r.Last?.CreatedAt, r.LastBackupAttemptAt, r.LastBackupError);
+                return new BackupCoverageRow(r.Id, r.Name, r.Site, issues.Count == 0 ? "Covered" : string.Join("; ", issues), r.Last?.CreatedAt, r.LastBackupAttemptAt, r.LastBackupError, r.BackupChange, r.BackupChangeAt);
             }).ToList());
             if (IsDisposed) return;
             // Capture after the await so clicks made while the file checks ran are retained.
@@ -78,12 +101,12 @@ public sealed partial class MainForm
             if (_backupGrid.Columns.Contains("Id")) _backupGrid.Columns["Id"].Visible = false;
             foreach (DataGridViewColumn column in _backupGrid.Columns)
             {
-                column.HeaderText = column.Name switch { "LastBackup" => "Last backup", "LastAttempt" => "Last attempt", _ => column.Name };
+                column.HeaderText = column.Name switch { "LastBackup" => "Last backup", "LastAttempt" => "Last attempt", "ComparedAt" => "Compared at", "Change" => "Configuration change", _ => column.Name };
                 column.MinimumWidth = column.Name == "Coverage" ? 240 : column.Name == "Device" ? 200 : 100;
                 column.FillWeight = column.Name == "Coverage" ? 240 : column.Name == "Device" ? 200 : 100;
-                if (column.Name is "LastBackup" or "LastAttempt") column.DefaultCellStyle.Format = "dd MMM yyyy HH:mm";
+                if (column.Name is "LastBackup" or "LastAttempt" or "ComparedAt") column.DefaultCellStyle.Format = "dd MMM yyyy HH:mm";
             }
-            _backupCoverage.Text = $"{rows.Count} devices   •   {rows.Count(r => r.Coverage == "Covered")} covered   •   {rows.Count(r => r.Coverage.Contains("Never"))} never backed up   •   {rows.Count(r => r.Coverage.Contains("No active"))} unscheduled\n{rows.Count(r => r.Coverage.Contains("Overdue"))} overdue   •   {rows.Count(r => r.Coverage.Contains("failed"))} failed   •   {rows.Count(r => r.Coverage.Contains("missing"))} missing files   |   Checked {DateTime.Now:T}";
+            _backupCoverage.Text = $"{rows.Count(r => r.Change == "Changed")} changed configurations • Select Changed, then choose one device to Compare Exports.\n{rows.Count} devices   •   {rows.Count(r => r.Coverage == "Covered")} covered   •   {rows.Count(r => r.Coverage.Contains("Never"))} never backed up   •   {rows.Count(r => r.Coverage.Contains("No active"))} unscheduled\n{rows.Count(r => r.Coverage.Contains("Overdue"))} overdue   •   {rows.Count(r => r.Coverage.Contains("failed"))} failed   •   {rows.Count(r => r.Coverage.Contains("missing"))} missing files   |   Checked {DateTime.Now:T}";
         }
         catch (Exception ex) { if (!IsDisposed) _backupCoverage.Text = ex.Message; }
         finally { _readingCoverage = false; }

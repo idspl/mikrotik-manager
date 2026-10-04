@@ -16,7 +16,7 @@ public sealed partial class MainForm
     private DpiDialog BuildUpgradeScheduleDialog(out TextBox name, out DateTimePicker start,
         out NumericUpDown concurrent, out CheckBox cutoffEnabled, out DateTimePicker cutoff)
     {
-        var dialog = new DpiDialog { Text = "Create Upgrade Schedule", ClientSize = new Size(570, 390),
+        var dialog = new DpiDialog { Text = "Schedule Backup + Upgrade", ClientSize = new Size(570, 390),
             MinimumSize = new Size(480, 360), StartPosition = FormStartPosition.CenterParent, MaximizeBox = false };
         var shell = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 2 };
         shell.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
@@ -33,7 +33,7 @@ public sealed partial class MainForm
         check.CheckedChanged += (_, _) => end.Enabled = check.Checked;
         AddRow(layout, "Name", name); AddRow(layout, "Run at", start); AddRow(layout, "Concurrent (0 = all)", concurrent);
         AddRow(layout, "", cutoffEnabled); AddRow(layout, "Cutoff", cutoff);
-        var note = new Label { Text = "Parallel upgrades require independent devices. Failure policy and retries use the Upgrade menu settings.", AutoSize = true, Dock = DockStyle.Fill, Margin = new Padding(3, 12, 3, 12) };
+        var note = new Label { Text = "BACKUP + UPGRADE: creates on-router safety backups, upgrades RouterOS/firmware and may reboot devices. For local files without upgrades, use Create Backup Schedule. Parallel upgrades require independent devices.", AutoSize = true, Dock = DockStyle.Fill, Margin = new Padding(3, 12, 3, 12) };
         int row = layout.RowCount++; layout.RowStyles.Add(new RowStyle(SizeType.AutoSize)); layout.Controls.Add(note, 0, row); layout.SetColumnSpan(note, 2);
         scroll.Controls.Add(layout);
         var footer = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, FlowDirection = FlowDirection.RightToLeft, Padding = new Padding(12), BackColor = Color.FromArgb(232, 241, 252) };
@@ -79,7 +79,7 @@ public sealed partial class MainForm
         if (job.Kind == ScheduledJobKind.Upgrade) effect += "\nThe saved cutoff is ignored for this manual run. Routers may reboot and interrupt service.";
         string names = string.Join("\n", routers.Take(12).Select(r => "• " + r.Name + " (" + r.Host + ")"));
         if (routers.Count > 12) names += $"\n…and {routers.Count - 12} more";
-        if (MessageBox.Show(this, $"Run '{job.Name}' now?\nType: {job.Kind} | Routers: {routers.Count} | Concurrent: {(job.MaxConcurrency == 0 ? "All" : job.MaxConcurrency.ToString())}\n\n{names}\n\n{effect}", "Run Job Now", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
+        if (MessageBox.Show(this, $"Run '{job.Name}' now?\nType: {job.TypeLabel} | Routers: {routers.Count} | Concurrent: {(job.EffectiveMaxConcurrency == 0 ? "All" : job.EffectiveMaxConcurrency.ToString())}\n\n{names}\n\n{effect}", "Run Job Now", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
         await RunScheduledInUiAsync(job, manualRun: true);
         RefreshDashboard();
     }

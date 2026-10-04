@@ -24,7 +24,7 @@ public sealed class RouterBackupService(AppSettings settings, int? retentionDays
         async Task BackupOneAsync(RouterRecord router)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            router.LastBackupAttemptAt = DateTime.Now; router.LastBackupError = "";
+            router.LastBackupAttemptAt = DateTime.Now; router.LastBackupError = ""; router.LastBackupFolder = outputFolder;
             Progress?.Invoke(new(router.Id, "Backup", 1, 10, "Running", "Creating and downloading local backup"));
             string safeName = SafeName(router.Name);
             string idSuffix = router.Id.ToString("N")[..8];
@@ -51,6 +51,10 @@ public sealed class RouterBackupService(AppSettings settings, int? retentionDays
                 (backupBytes, backupHash) = await VerifyFileAsync(localBackup, timeout.Token);
                 (exportBytes, exportHash) = await VerifyFileAsync(localExport, timeout.Token);
                 verification = "Verified size and SHA-256";
+                try { router.BackupChange = await BackupChangeDetector.CompareAsync(router.Backups.LastOrDefault()?.ExportPath, localExport, timeout.Token); }
+                catch (OperationCanceledException) { throw; }
+                catch (Exception) { router.BackupChange = "Comparison unavailable"; }
+                router.BackupChangeAt = DateTime.Now;
                 router.Backups.Add(new BackupHistoryEntry(DateTime.Now, localBackup, localExport,
                     backupHash, exportHash, verification));
                 Interlocked.Increment(ref verified);

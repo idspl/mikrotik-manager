@@ -15,9 +15,12 @@ public sealed partial class MainForm
         if (dialog.ShowDialog(this) != DialogResult.OK || dialog.Router is not { } edited) return;
         edited.Site = router.Site; edited.Tags = router.Tags; edited.LastSeenAt = router.LastSeenAt;
         edited.LastBackupAttemptAt = router.LastBackupAttemptAt; edited.LastBackupError = router.LastBackupError;
+        edited.BackupChange = router.BackupChange; edited.BackupChangeAt = router.BackupChangeAt; edited.LastBackupFolder = router.LastBackupFolder;
         edited.Id = router.Id; edited.BackupPassword = router.BackupPassword; edited.Backups = router.Backups;
         if (edited.Host == router.Host && edited.ApiPort == router.ApiPort)
         {
+            edited.Health = router.Health; edited.LastHealthCheckAt = router.LastHealthCheckAt; edited.LastHealthError = router.LastHealthError;
+            edited.HealthObservedThisSession = router.HealthObservedThisSession;
             edited.Model = router.Model; edited.RouterOsVersion = router.RouterOsVersion;
             edited.FirmwareVersion = router.FirmwareVersion; edited.AvailableFirmware = router.AvailableFirmware;
             edited.LastCheckedAt = router.LastCheckedAt;
