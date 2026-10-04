@@ -40,7 +40,7 @@ public sealed partial class MainForm : Form
         _store = store ?? new SecureStore();
         AppTheme.Set(_store.LoadSettings().Theme);
         _routerContextMenu = new ContextMenuStrip(_components);
-        Text = "MikroTik Manager 0.5.3";
+        Text = "MikroTik Manager 0.5.4";
         Font = new Font("Segoe UI", 9F);
         Icon = AppIcon.Current;
         Width = 1440;
@@ -188,8 +188,8 @@ public sealed partial class MainForm : Form
         var updatesMenu = new ToolStripDropDownButton("Help") { Alignment = ToolStripItemAlignment.Right };
         updatesMenu.DropDownItems.Add("Check for Updates", null, async (_, _) => await CheckForUpdatesAsync(true));
         updatesMenu.DropDownItems.Add(new ToolStripSeparator());
-        updatesMenu.DropDownItems.Add("About MikroTik Manager 0.5.3", null, (_, _) =>
-            MessageBox.Show("MikroTik Manager 0.5.3\n\nMade for MikroTik\nIndependent open-source software by Indigo Data Services Pvt Ltd.", Text,
+        updatesMenu.DropDownItems.Add("About MikroTik Manager 0.5.4", null, (_, _) =>
+            MessageBox.Show("MikroTik Manager 0.5.4\n\nMade for MikroTik\nIndependent open-source software by Indigo Data Services Pvt Ltd.", Text,
                 MessageBoxButtons.OK, MessageBoxIcon.Information));
         actions.Items.AddRange([inventoryMenu, selectionMenu, groupMenu, maintenanceMenu, upgradeMenu, updatesMenu]);
 
@@ -347,7 +347,7 @@ public sealed partial class MainForm : Form
         _jobGrid.MultiSelect = false;
         _jobGrid.Columns.Add(TextColumn(nameof(UpgradeJob.Name), "Job", 180, true));
         _jobGrid.Columns.Add(TextColumn(nameof(UpgradeJob.Kind), "Type", 80, true));
-        _jobGrid.Columns.Add(TextColumn(nameof(UpgradeJob.MaxConcurrency), "Concurrent (0=all)", 120, true));
+        _jobGrid.Columns.Add(TextColumn(nameof(UpgradeJob.EffectiveMaxConcurrency), "Concurrent (0=all)", 120, true));
         _jobGrid.Columns.Add(TextColumn(nameof(UpgradeJob.Recurrence), "Repeat", 80, true));
         _jobGrid.Columns.Add(TextColumn(nameof(UpgradeJob.ScheduledLocalTime), "Next / planned run", 150, true));
         _jobGrid.Columns.Add(TextColumn(nameof(UpgradeJob.LastRunResult), "Last result", 260, true));
@@ -915,8 +915,11 @@ public sealed partial class MainForm : Form
         _running = new CancellationTokenSource();
         try
         {
+            _lastUpgradeRouterIds = [];
+            PrepareProgressRows(selected); _tabs.SelectedTab = _maintenancePage;
             var service = new RouterBackupService(_store.LoadSettings());
             service.Message += AppendLog;
+            service.Progress += UpdateProgress;
             BulkBackupResult result = await service.BackupAllAsync(selected, dialog.SelectedPath, _running.Token);
             SaveRouters();
             RequestInventoryPaint();
@@ -927,7 +930,7 @@ public sealed partial class MainForm : Form
         }
         catch (OperationCanceledException) { MessageBox.Show("Bulk backup cancelled. Completed files remain in the selected folder."); }
         catch (Exception ex) { ShowError(ex); }
-        finally { SaveRouters(); RequestInventoryPaint(); SetBusy(false, "Ready"); _running.Dispose(); _running = null; }
+        finally { FlushUiUpdates(); SaveRouters(); RequestInventoryPaint(); SetBusy(false, "Ready"); _running.Dispose(); _running = null; }
     }
 
     private async void RunNow(object? sender, EventArgs e)
@@ -1090,6 +1093,7 @@ public sealed partial class MainForm : Form
 
     private static string RouterGridStatus(MaintenanceProgressUpdate update)
     {
+        if (update.Stage == "Backup" && update.Result == "Cancelled") return "Backup cancelled";
         if (update.Stage == "Backup") return update.Result == "Completed" ? "Local backup completed" : update.Result == "Failed" ? "Backup failed: " + update.Message : "Backing up locally";
         if (update.Result == "Completed") return update.Message.StartsWith("Already current") ? "Already current; verified" : "Completed: upgraded successfully";
         if (update.Result == "Failed") return "Failed: " + update.Message;

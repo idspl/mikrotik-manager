@@ -63,6 +63,7 @@ internal static class Program
         if (job is null || job.State != "Scheduled") { Environment.ExitCode = job?.State == "Completed" ? 0 : 2; return; }
         if (job.ScheduledLocalTime > DateTime.Now)
         { Environment.ExitCode = job.Kind == ScheduledJobKind.Backup && job.CompletedAt is not null && job.LastRunSuccessful ? 0 : 2; return; }
+        string? backupSummary = null;
         job.State = "Running";
         job.StartedAt = DateTime.Now;
         store.SaveJobs(jobs);
@@ -74,8 +75,8 @@ internal static class Program
             if (job.Kind == ScheduledJobKind.Backup)
             {
                 var backup = await ScheduledBackupRunner.RunAsync(store, store.LoadSettings(), job, selected, null, null, CancellationToken.None);
-                job.State = backup.Failed == 0 ? "Completed" : $"Backup failed: {backup.Failed} routers";
-                job.LastRunResult = $"Backup: {backup.Successful} successful, {backup.Failed} failed; {backup.Folder}";
+                job.State = backup.Failed == 0 ? "Completed" : $"Completed with {backup.Failed} backup failures";
+                backupSummary = job.LastRunResult = $"Backup: {backup.Successful} successful, {backup.Failed} failed; {backup.Folder}";
             }
             else
             {
@@ -95,7 +96,7 @@ internal static class Program
         finally
         {
             bool success = job.State == "Completed";
-            string result = job.State == "Completed" && job.Kind == ScheduledJobKind.Backup ? job.LastRunResult : job.State;
+            string result = backupSummary ?? job.State;
             BackupSchedulePolicy.Finish(job, success, result, DateTime.Now);
             store.SaveRouters(routers);
             store.SaveJobs(jobs);

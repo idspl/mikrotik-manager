@@ -1,4 +1,4 @@
-# MikroTik Manager 0.5.3
+# MikroTik Manager 0.5.4
 
 [![Windows build](https://github.com/idspl/mikrotik-manager/actions/workflows/windows-build.yml/badge.svg)](https://github.com/idspl/mikrotik-manager/actions/workflows/windows-build.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -36,6 +36,13 @@ MikroTik Manager is currently distributed without a paid Authenticode certificat
 Do not run the file if it came from another website, the checksum differs, VirusTotal reports multiple credible detections, or the release cannot be matched to this repository. A single generic or heuristic detection can be a false positive; investigate it rather than assuming either safety or infection.
 
 Use a test router before production deployment. Router upgrades, reboots and sensitive configuration exports can interrupt services or expose credentials if operated without appropriate controls.
+
+## 0.5.4 independent parallel backups
+
+- Manual and scheduled backup-only jobs start all selected devices in parallel, including previously saved schedules. Upgrade failure policies do not apply to backups.
+- Connection or device timeouts fail only that device. Each device has a ten-minute backup deadline; remote cleanup is limited to ten seconds. Explicit cancellation stops the batch after active tasks finish cleanup.
+- Progress and the CSV manifest show each device result, with a final successful/failed count. Parallel manifest writes and scheduled history persistence are serialized.
+- Backup-before-upgrade retains the upgrade engine's safety and failure rules. Failed backup-only runs retain earlier recovery copies and recurring schedules remain scheduled.
 
 ## 0.5.3 appearance and updater
 

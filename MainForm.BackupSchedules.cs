@@ -32,7 +32,7 @@ public sealed partial class MainForm
         AddRow(panel, "Schedule name", name); AddRow(panel, "First / next run", start); AddRow(panel, "Repeat", repeat);
         AddRow(panel, "Local folder", folder); AddRow(panel, "", browse); AddRow(panel, "Keep days (0 = all)", retention);
         AddRow(panel, "Routers", new Label { Text = $"{routers.Count} routers: " + string.Join(", ", routers.Take(4).Select(r => r.Name)), AutoSize = true, MaximumSize = new Size(400, 45) });
-        AddRow(panel, "", new Label { Text = "Stores encrypted .backup and sensitive .rsc exports. Each schedule has a separate subfolder. Windows SYSTEM and your desktop user need write access; use a local fixed drive.", AutoSize = true, MaximumSize = new Size(400, 65) });
+        AddRow(panel, "", new Label { Text = "Backups run in parallel and continue after device failures. Stores sensitive exports in a separate folder. Use a local fixed drive writable by Windows SYSTEM and your desktop user.", AutoSize = true, MaximumSize = new Size(400, 65) });
         var buttons = new FlowLayoutPanel { AutoSize = true };
         buttons.Controls.Add(new Button { Text = "Save Schedule", DialogResult = DialogResult.OK, AutoSize = true });
         buttons.Controls.Add(new Button { Text = "Cancel", DialogResult = DialogResult.Cancel, AutoSize = true }); AddRow(panel, "", buttons);

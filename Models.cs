@@ -54,6 +54,7 @@ public sealed class UpgradeJob
     public string LastRunResult { get; set; } = "";
     public bool LastRunSuccessful { get; set; }
     public int MaxConcurrency { get; set; } = 1;
+    public int EffectiveMaxConcurrency => Kind == ScheduledJobKind.Backup ? 0 : MaxConcurrency;
     public int FailureLimit { get; set; }
 }
 

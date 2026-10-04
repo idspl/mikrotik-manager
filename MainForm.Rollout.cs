@@ -61,6 +61,7 @@ public sealed partial class MainForm
         SetBusy(true, "Scheduled " + job.Kind + ": " + job.Name);
         _running = new CancellationTokenSource();
         var selected = job.RouterIds.Select(id => _routers.FirstOrDefault(r => r.Id == id)).OfType<RouterRecord>().ToList();
+        string? backupSummary = null;
         job.State = "Running"; job.StartedAt = DateTime.Now;
         try
         {
@@ -72,8 +73,8 @@ public sealed partial class MainForm
             {
                 var backup = await ScheduledBackupRunner.RunAsync(_store, _store.LoadSettings(), job, selected, AppendLog,
                     update => UpdateProgress(update), _running.Token);
-                job.State = backup.Failed == 0 ? "Completed" : $"Backup failed: {backup.Failed} routers";
-                job.LastRunResult = $"Backup: {backup.Successful} successful, {backup.Failed} failed; {backup.Folder}";
+                job.State = backup.Failed == 0 ? "Completed" : $"Completed with {backup.Failed} backup failures";
+                backupSummary = job.LastRunResult = $"Backup: {backup.Successful} successful, {backup.Failed} failed; {backup.Folder}";
             }
             else
             {
@@ -91,7 +92,7 @@ public sealed partial class MainForm
         {
             FlushUiUpdates();
             bool success = job.State == "Completed";
-            string result = success && job.Kind == ScheduledJobKind.Backup ? job.LastRunResult : job.State;
+            string result = backupSummary ?? job.State;
             BackupSchedulePolicy.Finish(job, success, result, DateTime.Now, manualRun ? previousState : null); _activeUpgrade = null;
             try { SaveAll(); } catch (Exception ex) { ShowError(ex); }
             _running.Dispose(); _running = null; SetBusy(false, job.Name + ": " + job.LastRunResult);
