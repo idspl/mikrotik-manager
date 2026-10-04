@@ -55,7 +55,11 @@ public sealed partial class MainForm
     private void ShowBackupHistory(object? sender, EventArgs e)
     {
         var selected = SelectedRouters();
-        var routers = selected.Count > 0 ? selected : _routers.ToList();
+        ShowBackupHistory(selected.Count > 0 ? selected : _routers.ToList());
+    }
+
+    private void ShowBackupHistory(List<RouterRecord> routers)
+    {
         using var dialog = new DpiDialog { Text = "Local Backup History", Width = 1100, Height = 550, StartPosition = FormStartPosition.CenterParent };
         var entries = routers.SelectMany(r => r.Backups.Select(b => new { Router = r.Name, Backup = b })).OrderByDescending(x => x.Backup.CreatedAt).ToList();
         var grid = new DataGridView { Dock = DockStyle.Fill, ReadOnly = true, AllowUserToAddRows = false, SelectionMode = DataGridViewSelectionMode.FullRowSelect, MultiSelect = false,

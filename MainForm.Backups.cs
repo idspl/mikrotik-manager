@@ -5,6 +5,7 @@ public sealed partial class MainForm
     private readonly SmoothGrid _backupGrid = new();
     private readonly Label _backupCoverage = new() { Dock = DockStyle.Top, AutoSize = false, Padding = new Padding(15), Text = "Refresh coverage to check local backup files and schedules." };
     private bool _readingCoverage;
+    private readonly Label _backupSelection = new() { AutoSize = true, Padding = new Padding(8, 8, 0, 0), Text = "0 selected • Ctrl-click or Shift-click rows" };
     private sealed record BackupCoverageRow(Guid Id, string Device, string Site, string Coverage, DateTime? LastBackup, DateTime? LastAttempt, string Error);
 
     private TabPage BuildBackupsPage()
@@ -13,11 +14,20 @@ public sealed partial class MainForm
         var bar = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, Padding = new Padding(10) };
         bar.Controls.Add(Button("Refresh Coverage", async (_, _) => await RefreshBackupCoverageAsync()));
         bar.Controls.Add(Button("Compare Exports", CompareBackups));
-        bar.Controls.Add(Button("Backup History", (_, _) => { SelectBackupDevice(); ShowBackupHistory(this, EventArgs.Empty); }));
-        bar.Controls.Add(Button("Backup Selected Device", (_, _) => { SelectBackupDevice(); BackupSelectedRouters(this, EventArgs.Empty); }));
+        bar.Controls.Add(Button("Backup History", (_, _) =>
+        {
+            var selected = SelectedBackupRouters();
+            if (selected.Count == 0) { MessageBox.Show("Select devices in Backups first."); return; }
+            ShowBackupHistory(selected);
+        }));
+        bar.Controls.Add(Button("Backup Selected Devices", async (_, _) => await BackupRoutersAsync(SelectedBackupRouters())));
+        bar.Controls.Add(Button("Select All", (_, _) => _backupGrid.SelectAll()));
+        bar.Controls.Add(Button("Clear Selection", (_, _) => _backupGrid.ClearSelection()));
         bar.Controls.Add(Button("Manage Schedules", (_, _) => _tabs.SelectedTab = _schedulesPage));
         _backupGrid.Dock = DockStyle.Fill; _backupGrid.ReadOnly = true; _backupGrid.AllowUserToAddRows = false;
-        _backupGrid.SelectionMode = DataGridViewSelectionMode.FullRowSelect; _backupGrid.MultiSelect = false;
+        bar.Controls.Add(_backupSelection);
+        _backupGrid.SelectionMode = DataGridViewSelectionMode.FullRowSelect; _backupGrid.MultiSelect = true;
+        _backupGrid.SelectionChanged += (_, _) => _backupSelection.Text = $"{_backupGrid.SelectedRows.Count} selected • Ctrl-click or Shift-click rows";
         _backupGrid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill; StyleGrid(_backupGrid);
         page.Controls.Add(_backupGrid); page.Controls.Add(_backupCoverage); page.Controls.Add(bar);
         void SizeSummary()
@@ -32,12 +42,11 @@ public sealed partial class MainForm
         _tabs.SelectedIndexChanged += async (_, _) => { if (_tabs.SelectedTab == page) await RefreshBackupCoverageAsync(); };
         return page;
     }
-    private void SelectBackupDevice()
+    private List<RouterRecord> SelectedBackupRouters()
     {
-        _routerGrid.ClearSelection();
-        if (_backupGrid.CurrentRow?.DataBoundItem is not BackupCoverageRow item) return;
-        _routerSearch.Clear(); _statusFilter.SelectedIndex = 0;
-        foreach (DataGridViewRow row in _routerGrid.Rows) if (row.DataBoundItem is RouterRecord r && r.Id == item.Id) row.Selected = true;
+        var ids = _backupGrid.SelectedRows.Cast<DataGridViewRow>().OrderBy(row => row.Index)
+            .Select(row => row.DataBoundItem).OfType<BackupCoverageRow>().Select(row => row.Id).ToHashSet();
+        return _routers.Where(router => ids.Contains(router.Id)).ToList();
     }
     private async Task RefreshBackupCoverageAsync()
     {
@@ -57,7 +66,15 @@ public sealed partial class MainForm
                 return new BackupCoverageRow(r.Id, r.Name, r.Site, issues.Count == 0 ? "Covered" : string.Join("; ", issues), r.Last?.CreatedAt, r.LastBackupAttemptAt, r.LastBackupError);
             }).ToList());
             if (IsDisposed) return;
+            // Capture after the await so clicks made while the file checks ran are retained.
+            var selectedIds = SelectedBackupRouters().Select(r => r.Id).ToHashSet();
+            int first = _backupGrid.FirstDisplayedScrollingRowIndex;
             _backupGrid.DataSource = rows;
+            _backupGrid.ClearSelection();
+            foreach (DataGridViewRow row in _backupGrid.Rows)
+                if (row.DataBoundItem is BackupCoverageRow item) row.Selected = selectedIds.Contains(item.Id);
+            if (first >= 0 && _backupGrid.Rows.Count > 0)
+                _backupGrid.FirstDisplayedScrollingRowIndex = Math.Min(first, _backupGrid.Rows.Count - 1);
             if (_backupGrid.Columns.Contains("Id")) _backupGrid.Columns["Id"].Visible = false;
             foreach (DataGridViewColumn column in _backupGrid.Columns)
             {
@@ -73,8 +90,9 @@ public sealed partial class MainForm
     }
     private void CompareBackups(object? sender, EventArgs e)
     {
-        if (_backupGrid.CurrentRow?.DataBoundItem is not BackupCoverageRow row) { MessageBox.Show("Select a device in Backups first."); return; }
-        var router = _routers.FirstOrDefault(r => r.Id == row.Id); if (router is null) return;
+        var selected = SelectedBackupRouters();
+        if (selected.Count != 1) { MessageBox.Show("Select exactly one device to compare its exports."); return; }
+        var router = selected[0];
         var entries = router.Backups.OrderByDescending(b => b.CreatedAt).ToList();
         if (entries.Count < 2) { MessageBox.Show("This device needs two recorded exports to compare."); return; }
         using var dialog = new DpiDialog { Text = "Compare backups — " + router.Name, Width = 1150, Height = 720, StartPosition = FormStartPosition.CenterParent };

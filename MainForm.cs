@@ -30,7 +30,7 @@ public sealed partial class MainForm : Form
     private bool _suspendRouterSaves;
     private bool _contextMenuRowValid;
     private List<Guid> _lastUpgradeRouterIds = [];
-    private readonly Button _skipFailedContinue = new() { Text = "Skip Failed & Continue", AutoSize = true, Enabled = false };
+    private readonly Button _skipFailedContinue = Button("Skip Failed and Continue", null);
 
     public MainForm(SecureStore? store = null, bool smokeTest = false)
     {
@@ -40,7 +40,7 @@ public sealed partial class MainForm : Form
         _store = store ?? new SecureStore();
         AppTheme.Set(_store.LoadSettings().Theme);
         _routerContextMenu = new ContextMenuStrip(_components);
-        Text = "MikroTik Manager 0.5.4";
+        Text = "MikroTik Manager 0.5.5";
         Font = new Font("Segoe UI", 9F);
         Icon = AppIcon.Current;
         Width = 1440;
@@ -188,8 +188,8 @@ public sealed partial class MainForm : Form
         var updatesMenu = new ToolStripDropDownButton("Help") { Alignment = ToolStripItemAlignment.Right };
         updatesMenu.DropDownItems.Add("Check for Updates", null, async (_, _) => await CheckForUpdatesAsync(true));
         updatesMenu.DropDownItems.Add(new ToolStripSeparator());
-        updatesMenu.DropDownItems.Add("About MikroTik Manager 0.5.4", null, (_, _) =>
-            MessageBox.Show("MikroTik Manager 0.5.4\n\nMade for MikroTik\nIndependent open-source software by Indigo Data Services Pvt Ltd.", Text,
+        updatesMenu.DropDownItems.Add("About MikroTik Manager 0.5.5", null, (_, _) =>
+            MessageBox.Show("MikroTik Manager 0.5.5\n\nMade for MikroTik\nIndependent open-source software by Indigo Data Services Pvt Ltd.", Text,
                 MessageBoxButtons.OK, MessageBoxIcon.Information));
         actions.Items.AddRange([inventoryMenu, selectionMenu, groupMenu, maintenanceMenu, upgradeMenu, updatesMenu]);
 
@@ -298,6 +298,9 @@ public sealed partial class MainForm : Form
         var page = new TabPage("Maintenance Progress");
         var bar = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, Padding = new Padding(8), WrapContents = true };
         bar.Controls.Add(Button("Retry Failed", RetryFailed));
+        _skipFailedContinue.Enabled = false;
+        _skipFailedContinue.AccessibleDescription = "Continue only unstarted devices after an upgrade failure. Backup jobs continue automatically.";
+        new ToolTip(_components).SetToolTip(_skipFailedContinue, _skipFailedContinue.AccessibleDescription);
         _skipFailedContinue.Click += SkipFailedAndContinue;
         bar.Controls.Add(_skipFailedContinue);
         bar.Controls.Add(Button("Pause New Starts", PauseAfterRouter));
@@ -904,9 +907,11 @@ public sealed partial class MainForm : Form
     }
 
     private async void BackupSelectedRouters(object? sender, EventArgs e)
+        => await BackupRoutersAsync(SelectedRouters());
+
+    private async Task BackupRoutersAsync(List<RouterRecord> selected)
     {
-        if (_operationInProgress) return;
-        List<RouterRecord> selected = SelectedRouters();
+        if (_operationInProgress || _updateInProgress) return;
         if (selected.Count == 0) { MessageBox.Show("Select at least one router."); return; }
         using var dialog = new BackupFolderDialog();
         if (dialog.ShowDialog(this) != DialogResult.OK) return;
@@ -1217,9 +1222,9 @@ public sealed partial class MainForm : Form
     }
     private void ShowError(Exception ex) => MessageBox.Show(ex.Message, Text, MessageBoxButtons.OK, MessageBoxIcon.Error);
 
-    private static Button Button(string text, EventHandler click)
+    private static Button Button(string text, EventHandler? click)
     {
-        var b = new Button { Text = text, AutoSize = true, MinimumSize = new Size(0, 32), FlatStyle = FlatStyle.Flat,
+        var b = new ThemedButton { Text = text, AutoSize = true, MinimumSize = new Size(0, 32), FlatStyle = FlatStyle.Flat,
             Padding = new Padding(7, 3, 7, 3), BackColor = Color.White, ForeColor = Color.FromArgb(28, 49, 78), Cursor = Cursors.Hand };
         b.FlatAppearance.BorderColor = Color.FromArgb(205, 215, 228);
         if (text.StartsWith("Upgrade Selected") || text.StartsWith("Create Upgrade")) { b.BackColor = Color.FromArgb(40, 96, 166); b.ForeColor = Color.White; }
