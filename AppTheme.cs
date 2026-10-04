@@ -62,6 +62,26 @@ internal static class AppTheme
         if (root is CheckBox check) check.UseVisualStyleBackColor = false;
         if (root is RadioButton radio) radio.UseVisualStyleBackColor = false;
         if (root is LinkLabel link) { link.LinkColor = RunningText; link.ActiveLinkColor = RunningText; }
+        if (root is ComboBox combo)
+        {
+            combo.FlatStyle = FlatStyle.Flat;
+            if (!OwnerDrawn.TryGetValue(combo, out _))
+            {
+                OwnerDrawn.Add(combo, new object()); combo.DrawMode = DrawMode.OwnerDrawFixed;
+                void SizeItems() => combo.ItemHeight = Math.Max(18, combo.Font.Height + 6);
+                combo.FontChanged += (_, _) => SizeItems(); SizeItems();
+                combo.DrawItem += (_, e) => {
+                    if (e.Bounds.Width <= 0 || e.Bounds.Height <= 0) return;
+                    Color back = (e.State & DrawItemState.Selected) != 0 ? Selection : Surface;
+                    Color fore = combo.Enabled ? Text : Muted;
+                    using var brush = new SolidBrush(back); e.Graphics.FillRectangle(brush, e.Bounds);
+                    string value = e.Index >= 0 ? combo.GetItemText(combo.Items[e.Index]) : combo.Text;
+                    TextRenderer.DrawText(e.Graphics, value, combo.Font, Rectangle.Inflate(e.Bounds, -3, 0), fore,
+                        TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
+                    if ((e.State & DrawItemState.Focus) != 0) ControlPaint.DrawFocusRectangle(e.Graphics, e.Bounds, fore, back);
+                };
+            }
+        }
         if (root is DataGridView grid) ApplyGrid(grid);
         if (root is ToolStrip strip) ApplyStrip(strip);
         if (root.ContextMenuStrip is { } menu) ApplyStrip(menu);

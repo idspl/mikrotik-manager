@@ -42,7 +42,7 @@ Use a test router before production deployment. Router upgrades, reboots and sen
 - Switch Light/Dark from the sidebar or Settings → Appearance; saved immediately and restored on startup.
 - Applies to dashboard, inventory, maintenance, backups, settings, logs, menus and application dialogs without resetting selection or scroll.
 - Status colours and export comparisons retain readable success/failure colours in both themes.
-- Windows-provided message boxes, file pickers, calendar popups, title bars and some native control borders/scrollbars continue to follow Windows appearance.
+- Windows-provided message boxes, file pickers, date fields/calendar popups, title bars and some native control buttons/borders/scrollbars continue to follow Windows appearance.
 - The branded splash screen remains dark in both modes. Existing installations retain Light until changed.
 - See [feature audit](FEATURE-AUDIT.md) for current coverage and candidate future work.
 
