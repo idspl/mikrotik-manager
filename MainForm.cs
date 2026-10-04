@@ -1224,7 +1224,7 @@ public sealed partial class MainForm : Form
 
     private static Button Button(string text, EventHandler? click)
     {
-        var b = new Button { Text = text, AutoSize = true, MinimumSize = new Size(0, 32), FlatStyle = FlatStyle.Flat,
+        var b = new ThemedButton { Text = text, AutoSize = true, MinimumSize = new Size(0, 32), FlatStyle = FlatStyle.Flat,
             Padding = new Padding(7, 3, 7, 3), BackColor = Color.White, ForeColor = Color.FromArgb(28, 49, 78), Cursor = Cursors.Hand };
         b.FlatAppearance.BorderColor = Color.FromArgb(205, 215, 228);
         if (text.StartsWith("Upgrade Selected") || text.StartsWith("Create Upgrade")) { b.BackColor = Color.FromArgb(40, 96, 166); b.ForeColor = Color.White; }
