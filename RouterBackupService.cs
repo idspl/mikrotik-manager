@@ -7,19 +7,21 @@ namespace MikroTikManager;
 public sealed class RouterBackupService(AppSettings settings, int? retentionDays = null)
 {
     private readonly AppSettings _settings = settings;
+    internal Func<RouterRecord, string, string, CancellationToken, Task>? DownloadOverride { get; init; }
     public event Action<string>? Message;
     public event Action<MaintenanceProgressUpdate>? Progress;
 
     public async Task<BulkBackupResult> BackupAllAsync(IReadOnlyList<RouterRecord> routers, string parentFolder, CancellationToken cancellationToken)
     {
         string stamp = DateTime.Now.ToString("yyyy-MM-dd_HHmmss", CultureInfo.InvariantCulture);
-        string outputFolder = Path.Combine(parentFolder, "MikroTik-Manager-Backups_" + stamp);
+        string outputFolder = Path.Combine(parentFolder, "MikroTik-Manager-Backups_" + stamp + "_" + Guid.NewGuid().ToString("N")[..8]);
         Directory.CreateDirectory(outputFolder);
         string manifestPath = Path.Combine(outputFolder, "BackupManifest.csv");
         await File.WriteAllTextAsync(manifestPath, "Router,Address,API Port,Backup File,Backup Bytes,Backup SHA-256,Export File,Export Bytes,Export SHA-256,Backup Password,Verification,Result\r\n", new UTF8Encoding(true), cancellationToken);
 
         int successful = 0, failed = 0, verified = 0;
-        foreach (RouterRecord router in routers)
+        using var manifestLock = new SemaphoreSlim(1, 1);
+        async Task BackupOneAsync(RouterRecord router)
         {
             cancellationToken.ThrowIfCancellationRequested();
             router.LastBackupAttemptAt = DateTime.Now; router.LastBackupError = "";
@@ -28,8 +30,6 @@ public sealed class RouterBackupService(AppSettings settings, int? retentionDays
             string idSuffix = router.Id.ToString("N")[..8];
             string localStem = $"{safeName}_{SafeName(router.Host)}_{router.ApiPort}_{stamp}_{idSuffix}";
             string remoteStem = "indigo-" + DateTime.Now.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture) + "-" + idSuffix;
-            string remoteBackup = remoteStem + ".backup";
-            string remoteExport = remoteStem + ".rsc";
             string localBackup = Path.Combine(outputFolder, localStem + ".backup");
             string localExport = Path.Combine(outputFolder, localStem + ".rsc");
             string result;
@@ -42,61 +42,36 @@ public sealed class RouterBackupService(AppSettings settings, int? retentionDays
 
             try
             {
-                router.LastStatus = "Creating API backup";
-                Log(router, "Connecting to API");
-                await using RouterOsApiClient api = await RouterOsApiClient.ConnectAsync(router, _settings, cancellationToken);
-                router.ApiStatus = "Online"; router.LastSeenAt = DateTime.Now;
-                try
-                {
-                    try
-                    {
-                        await api.ExecuteAsync("/system/backup/save", cancellationToken,
-                            $"name={remoteStem}", $"password={router.BackupPassword}", "encryption=aes-sha256");
-                    }
-                    catch (RouterOsApiException)
-                    {
-                        await api.ExecuteAsync("/system/backup/save", cancellationToken,
-                            $"name={remoteStem}", $"password={router.BackupPassword}");
-                    }
-
-                    try
-                    {
-                        await api.ExecuteAsync("/export", cancellationToken, $"file={remoteStem}", "show-sensitive=yes");
-                    }
-                    catch (RouterOsApiException)
-                    {
-                        await api.ExecuteAsync("/export", cancellationToken, $"file={remoteStem}", "hide-sensitive=no");
-                    }
-
-                    router.LastStatus = "Downloading backup files";
-                    Log(router, "Downloading encrypted .backup");
-                    await api.DownloadFileAsync(remoteBackup, localBackup, cancellationToken);
-                    Log(router, "Downloading show-sensitive .rsc");
-                    await api.DownloadFileAsync(remoteExport, localExport, cancellationToken);
-                    (backupBytes, backupHash) = await VerifyFileAsync(localBackup, cancellationToken);
-                    (exportBytes, exportHash) = await VerifyFileAsync(localExport, cancellationToken);
-                    verification = "Verified size and SHA-256";
-                    router.Backups.Add(new BackupHistoryEntry(DateTime.Now, localBackup, localExport,
-                        backupHash, exportHash, verification));
-                    verified++;
-                    router.LastStatus = "Backup downloaded";
-                    result = "Success";
-                    successful++;
-                }
-                finally
-                {
-                    await TryDeleteAsync(api, remoteBackup, CancellationToken.None);
-                    await TryDeleteAsync(api, remoteExport, CancellationToken.None);
-                }
+                using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                timeout.CancelAfter(TimeSpan.FromMinutes(10));
+                if (DownloadOverride is not null)
+                    await DownloadOverride(router, localBackup, localExport, timeout.Token);
+                else
+                    await DownloadAsync(router, remoteStem, localBackup, localExport, timeout.Token);
+                (backupBytes, backupHash) = await VerifyFileAsync(localBackup, timeout.Token);
+                (exportBytes, exportHash) = await VerifyFileAsync(localExport, timeout.Token);
+                verification = "Verified size and SHA-256";
+                router.Backups.Add(new BackupHistoryEntry(DateTime.Now, localBackup, localExport,
+                    backupHash, exportHash, verification));
+                Interlocked.Increment(ref verified);
+                router.LastStatus = "Backup downloaded";
+                result = "Success";
+                Interlocked.Increment(ref successful);
             }
-            catch (OperationCanceledException) { router.LastBackupError = "Cancelled"; Progress?.Invoke(new(router.Id, "Backup", 1, 0, "Cancelled", "Backup cancelled")); throw; }
-            catch (Exception ex) when (ex is not OperationCanceledException)
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                router.LastBackupError = "Cancelled"; router.LastStatus = "Backup cancelled";
+                result = "Cancelled";
+                TryDeleteLocal(localBackup); TryDeleteLocal(localExport);
+            }
+            catch (Exception ex)
             {
                 router.ApiStatus = "Failed";
-                router.LastBackupError = ex.Message;
-                router.LastStatus = "Backup failed: " + ex.Message;
-                result = "Failed: " + ex.Message;
-                failed++;
+                string error = ex is OperationCanceledException ? "Device backup timed out" : ex.Message;
+                router.LastBackupError = error;
+                router.LastStatus = "Backup failed: " + error;
+                result = "Failed: " + error;
+                Interlocked.Increment(ref failed);
                 Log(router, result);
                 TryDeleteLocal(localBackup);
                 TryDeleteLocal(localExport);
@@ -106,12 +81,46 @@ public sealed class RouterBackupService(AppSettings settings, int? retentionDays
                 Csv(Path.GetFileName(localBackup)), backupBytes.ToString(CultureInfo.InvariantCulture), Csv(backupHash),
                 Csv(Path.GetFileName(localExport)), exportBytes.ToString(CultureInfo.InvariantCulture), Csv(exportHash),
                 Csv(router.BackupPassword), Csv(verification), Csv(result)) + "\r\n";
-            await File.AppendAllTextAsync(manifestPath, row, Encoding.UTF8, cancellationToken);
-            Progress?.Invoke(new(router.Id, "Backup", 1, 100, result == "Success" ? "Completed" : "Failed", result));
+            // One writer prevents parallel CSV rows from interleaving. Preserve completed results on cancellation.
+            await manifestLock.WaitAsync();
+            try { await File.AppendAllTextAsync(manifestPath, row, Encoding.UTF8); }
+            finally { manifestLock.Release(); }
+            Progress?.Invoke(new(router.Id, "Backup", 1, 100,
+                result == "Success" ? "Completed" : result == "Cancelled" ? "Cancelled" : "Failed", result));
         }
+        // Backup-only jobs always attempt all devices; upgrade queue failure rules do not apply.
+        await Task.WhenAll(routers.DistinctBy(r => r.Id).Select(BackupOneAsync));
+        cancellationToken.ThrowIfCancellationRequested();
         // Do not delete earlier recovery copies when the replacement run failed.
         if (failed == 0 && successful > 0) await Task.Run(() => CleanupExpiredBackups(parentFolder));
         return new BulkBackupResult(successful, failed, outputFolder, verified);
+    }
+
+    private async Task DownloadAsync(RouterRecord router, string remoteStem, string localBackup, string localExport, CancellationToken ct)
+    {
+        router.LastStatus = "Creating API backup";
+        Log(router, "Connecting to API");
+        await using RouterOsApiClient api = await RouterOsApiClient.ConnectAsync(router, _settings, ct);
+        router.ApiStatus = "Online"; router.LastSeenAt = DateTime.Now;
+        try
+        {
+            try { await api.ExecuteAsync("/system/backup/save", ct, $"name={remoteStem}", $"password={router.BackupPassword}", "encryption=aes-sha256"); }
+            catch (RouterOsApiException) { await api.ExecuteAsync("/system/backup/save", ct, $"name={remoteStem}", $"password={router.BackupPassword}"); }
+            try { await api.ExecuteAsync("/export", ct, $"file={remoteStem}", "show-sensitive=yes"); }
+            catch (RouterOsApiException) { await api.ExecuteAsync("/export", ct, $"file={remoteStem}", "hide-sensitive=no"); }
+            router.LastStatus = "Downloading backup files";
+            Log(router, "Downloading encrypted .backup");
+            await api.DownloadFileAsync(remoteStem + ".backup", localBackup, ct);
+            Log(router, "Downloading show-sensitive .rsc");
+            await api.DownloadFileAsync(remoteStem + ".rsc", localExport, ct);
+        }
+        finally
+        {
+            // A disconnected router must not leave the batch waiting forever for cleanup.
+            using var cleanup = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            await TryDeleteAsync(api, remoteStem + ".backup", cleanup.Token);
+            await TryDeleteAsync(api, remoteStem + ".rsc", cleanup.Token);
+        }
     }
 
     private async Task<(long Size, string Sha256)> VerifyFileAsync(string path, CancellationToken ct)
