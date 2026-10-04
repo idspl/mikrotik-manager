@@ -4,6 +4,7 @@ public sealed partial class MainForm
 {
     private readonly SmoothGrid _healthGrid = new();
     private readonly Label _healthSummary = new() { Dock = DockStyle.Top, AutoSize = true, Padding = new Padding(12), Text = "Refresh to collect a resource snapshot. Saved readings are stale until checked." };
+    private bool _healthRefreshing;
     private DateTime _lastHealthPoll = DateTime.MinValue;
     private TabPage _healthPage = null!;
     private sealed record HealthRow(Guid Id, string Device, string Status, string CPU, string MemoryUsed, string FreeStorage, string Uptime, string Temperature,
@@ -21,11 +22,13 @@ public sealed partial class MainForm
         actions.Controls.Add(Button("Device / Interfaces", (_, _) => {
             if (_healthGrid.CurrentRow?.DataBoundItem is HealthRow row && _routers.FirstOrDefault(r => r.Id == row.Id) is RouterRecord router) ShowDeviceDetails(router);
         }));
+        actions.Controls.Add(Button("Cancel Health Refresh", (_, _) => { if (_healthRefreshing) _running?.Cancel(); }));
         actions.Controls.Add(Button("Monitoring Settings", (_, _) => _tabs.SelectedTab = _tabs.TabPages.Cast<TabPage>().Single(t => t.Text == "Settings")));
         _healthGrid.Dock = DockStyle.Fill; _healthGrid.ReadOnly = true; _healthGrid.AllowUserToAddRows = false;
         _healthGrid.SelectionMode = DataGridViewSelectionMode.FullRowSelect; _healthGrid.MultiSelect = true;
         _healthGrid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill; StyleGrid(_healthGrid);
         page.Controls.Add(_healthGrid); page.Controls.Add(_healthSummary); page.Controls.Add(actions);
+        page.SizeChanged += (_, _) => _healthSummary.MaximumSize = new Size(Math.Max(100, page.ClientSize.Width), 0);
         _tabs.SelectedIndexChanged += (_, _) => { if (_tabs.SelectedTab == page) RefreshHealthView(); };
         return page;
     }
@@ -46,7 +49,7 @@ public sealed partial class MainForm
     private async Task RefreshHealthAsync(List<RouterRecord> routers)
     {
         if (_operationInProgress || _updateInProgress || routers.Count == 0) return;
-        SetBusy(true, "Reading device health..."); _running = new CancellationTokenSource();
+        _healthRefreshing = true; SetBusy(true, "Reading device health..."); _running = new CancellationTokenSource();
         int completed = 0;
         try
         {
@@ -61,7 +64,7 @@ public sealed partial class MainForm
             _lastHealthPoll = DateTime.Now;
             try { SaveRouters(); } catch (Exception ex) { ShowError(ex); }
             RefreshHealthView(); RefreshDashboard(); RequestInventoryPaint();
-            _running.Dispose(); _running = null; SetBusy(false, $"Health refresh finished: {completed} / {routers.Count}");
+            _running.Dispose(); _running = null; _healthRefreshing = false; SetBusy(false, $"Health refresh finished: {completed} / {routers.Count}");
         }
     }
     private void RefreshHealthView()

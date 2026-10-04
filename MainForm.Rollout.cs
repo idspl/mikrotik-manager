@@ -44,6 +44,7 @@ public sealed partial class MainForm
         var timer = new System.Windows.Forms.Timer(_components) { Interval = 2000 };
         timer.Tick += async (_, _) =>
         {
+            if (_healthRefreshing && _jobs.Any(j => j.State == "Scheduled" && j.ScheduledLocalTime <= DateTime.Now)) _running?.Cancel();
             // Native file pickers and ShowDialog disable their owner. Do not start a
             // job in their nested message loops while the user is editing inventory.
             if (_operationInProgress || _updateInProgress || !IsWindowEnabled(Handle)) return;

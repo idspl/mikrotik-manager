@@ -12,29 +12,34 @@ public sealed partial class MainForm
     {
         var page = new TabPage("Backups");
         var bar = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, Padding = new Padding(10) };
-        bar.Controls.Add(Button("Refresh Coverage", async (_, _) => await RefreshBackupCoverageAsync()));
-        bar.Controls.Add(Button("Compare Exports", CompareBackups));
-        bar.Controls.Add(Button("Backup History", (_, _) =>
-        {
-            var selected = SelectedBackupRouters();
-            if (selected.Count == 0) { MessageBox.Show("Select devices in Backups first."); return; }
-            ShowBackupHistory(selected);
-        }));
-        bar.Controls.Add(Button("Backup Selected Devices", async (_, _) => await BackupRoutersAsync(SelectedBackupRouters())));
-        bar.Controls.Add(Button("Retry Failed Backups", async (_, _) => {
+        var menu = new ToolStrip { Dock = DockStyle.None, GripStyle = ToolStripGripStyle.Hidden, AutoSize = true };
+        menu.Items.Add("Backup Selected Devices", null, async (_, _) => await BackupRoutersAsync(SelectedBackupRouters()));
+        var actions = new ToolStripDropDownButton("Backup Actions");
+        actions.DropDownItems.Add("Retry Failed Backups", null, async (_, _) => {
             var selection = SelectedBackupRouters();
             var failed = (selection.Count == 0 ? _routers.ToList() : selection).Where(r => r.LastBackupError.Length > 0 && r.LastBackupError != "Cancelled").ToList();
             if (failed.Count == 0) { MessageBox.Show("No failed backups in the selection. Clear selection to retry all devices with a recorded backup failure."); return; }
             await BackupRoutersAsync(failed);
-        }));
-        bar.Controls.Add(Button("Open Backup Folder", (_, _) => OpenSelectedBackupFolder()));
-        bar.Controls.Add(Button("Select Changed", (_, _) => {
+        });
+        actions.DropDownItems.Add("Open Backup Folder", null, (_, _) => OpenSelectedBackupFolder());
+        actions.DropDownItems.Add("Compare Exports", null, CompareBackups);
+        actions.DropDownItems.Add("Backup History", null, (_, _) => {
+            var selected = SelectedBackupRouters();
+            if (selected.Count == 0) { MessageBox.Show("Select devices in Backups first."); return; }
+            ShowBackupHistory(selected);
+        });
+        var selectionMenu = new ToolStripDropDownButton("Selection");
+        selectionMenu.DropDownItems.Add("Select All", null, (_, _) => _backupGrid.SelectAll());
+        selectionMenu.DropDownItems.Add("Clear Selection", null, (_, _) => _backupGrid.ClearSelection());
+        selectionMenu.DropDownItems.Add("Select Changed", null, (_, _) => {
             _backupGrid.ClearSelection();
             foreach (DataGridViewRow row in _backupGrid.Rows) if (row.DataBoundItem is BackupCoverageRow item && item.Change == "Changed") row.Selected = true;
-        }));
-        bar.Controls.Add(Button("Select All", (_, _) => _backupGrid.SelectAll()));
-        bar.Controls.Add(Button("Clear Selection", (_, _) => _backupGrid.ClearSelection()));
-        bar.Controls.Add(Button("Manage Schedules", (_, _) => _tabs.SelectedTab = _schedulesPage));
+        });
+        menu.Items.Add(actions); menu.Items.Add(selectionMenu);
+        menu.Items.Add("Refresh Coverage", null, async (_, _) => await RefreshBackupCoverageAsync());
+        menu.Items.Add("Schedules", null, (_, _) => _tabs.SelectedTab = _schedulesPage);
+        bar.Controls.Add(menu);
+        page.SizeChanged += (_, _) => menu.MaximumSize = new Size(Math.Max(100, page.ClientSize.Width - bar.Padding.Horizontal), 0);
         _backupGrid.Dock = DockStyle.Fill; _backupGrid.ReadOnly = true; _backupGrid.AllowUserToAddRows = false;
         bar.Controls.Add(_backupSelection);
         _backupGrid.SelectionMode = DataGridViewSelectionMode.FullRowSelect; _backupGrid.MultiSelect = true;

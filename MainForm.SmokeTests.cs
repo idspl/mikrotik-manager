@@ -33,6 +33,11 @@ public sealed partial class MainForm
                 throw new Exception("Dashboard card overlaps at " + scale);
         }
         Capture("dashboard");
+        if (_dashboardJobs.Parent is ScrollableControl dashboardScroll)
+        {
+            dashboardScroll.ScrollControlIntoView(_dashboardJobs); Capture("dashboard-tables");
+            dashboardScroll.AutoScrollPosition = Point.Empty;
+        }
         _tabs.SelectedTab = _healthPage;
         _routers[0].Health = new DeviceHealth(DateTime.Now, 23, 67108864, 268435456, 67108864, 134217728, "4d 03:12:00", "cpu-temperature: 42 °C");
         _routers[0].LastHealthCheckAt = DateTime.Now; _routers[0].HealthObservedThisSession = true;
@@ -54,7 +59,6 @@ public sealed partial class MainForm
         while (_readingCoverage && coverageWait.Elapsed < TimeSpan.FromSeconds(10)) { Application.DoEvents(); Thread.Sleep(10); }
         if (_readingCoverage || _backupGrid.Rows.Count != _routers.Count) throw new Exception("Backup coverage did not populate");
         if (scale == 1F) VerifyBackupSelectionAndContinue();
-        _backupCoverage.Text = "57 devices • 0 covered • 57 never backed up • 57 unscheduled\n0 overdue • 0 failed • 0 missing files | Checked 22:42:00";
         Application.DoEvents(); Capture("backups");
         if (_backupGrid.Bottom > _backupGrid.Parent!.ClientSize.Height || _backupGrid.Height < 100 || _backupCoverage.Height < _backupCoverage.GetPreferredSize(new Size(_backupCoverage.Width, 0)).Height || _backupGrid.Top < _backupCoverage.Bottom)
             throw new Exception("Backup summary overlaps table at " + scale);
