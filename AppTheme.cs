@@ -20,6 +20,9 @@ internal static class AppTheme
     internal static Color RunningBack => IsDark ? Color.FromArgb(30, 54, 86) : Color.FromArgb(229, 239, 255);
     internal static Color RunningText => IsDark ? Color.FromArgb(150, 194, 255) : Color.FromArgb(32, 83, 148);
 
+    internal static Color WarningBack => IsDark ? Color.FromArgb(76, 57, 24) : Color.FromArgb(255, 244, 214);
+    internal static Color WarningText => IsDark ? Color.FromArgb(255, 211, 119) : Color.FromArgb(123, 78, 0);
+
     private sealed record Original(Color Back, Color Fore);
     private static readonly ConditionalWeakTable<Control, Original> Originals = new();
     private static readonly ConditionalWeakTable<Control, object> OwnerDrawn = new();

@@ -120,7 +120,20 @@ public sealed partial class MainForm
         grid.DefaultCellStyle.SelectionBackColor = Color.FromArgb(218, 233, 250);
         grid.DefaultCellStyle.SelectionForeColor = Color.FromArgb(20, 40, 65);
         grid.CellFormatting += (_, e) => {
-            if (e.ColumnIndex < 0 || grid.Columns[e.ColumnIndex].DataPropertyName is not ("ApiStatus" or "Result" or "State" or "Status" or "Change")) return;
+            if (e.RowIndex < 0 || e.ColumnIndex < 0) return;
+            string property = grid.Columns[e.ColumnIndex].DataPropertyName;
+            if (property == nameof(RouterRecord.FirmwareVersion) && grid.Rows[e.RowIndex].DataBoundItem is RouterRecord router)
+            {
+                ReadingColors.Apply(grid, e, ReadingColors.Firmware(router.FirmwareVersion, router.AvailableFirmware)); return;
+            }
+            if (property == "Temperature")
+            {
+                var assessment = grid.Rows[e.RowIndex].DataBoundItem is HealthRow health && health.Status != "Online"
+                    ? new ReadingAssessment(ReadingTone.Unknown, "Retained / stale temperature; refresh health to verify")
+                    : ReadingColors.Temperature(e.Value?.ToString() ?? "");
+                ReadingColors.Apply(grid, e, assessment); return;
+            }
+            if (grid.Columns[e.ColumnIndex].DataPropertyName is not ("ApiStatus" or "Result" or "State" or "Status" or "Change")) return;
             string state = e.Value?.ToString() ?? "";
             if (state is "Online" or "Completed") { e.CellStyle.ForeColor = AppTheme.SuccessText; e.CellStyle.BackColor = AppTheme.SuccessBack; }
             else if (state == "Offline" || state.Contains("Failed", StringComparison.OrdinalIgnoreCase)) { e.CellStyle.ForeColor = AppTheme.FailureText; e.CellStyle.BackColor = AppTheme.FailureBack; }

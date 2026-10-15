@@ -13,6 +13,15 @@ internal static class RegressionTests
         Check(System.Text.Json.JsonSerializer.Deserialize<AppSettings>("{}")!.Theme == "Dark", "Older settings without a theme default to Dark");
         store.SaveSettings(new AppSettings { Theme = "Light" });
         Check(store.LoadSettings().Theme == "Light", "Explicit Light preference is preserved");
+        Check(ReadingColors.Firmware("7.20", "7.20").Tone == ReadingTone.Good, "Matching firmware");
+        Check(ReadingColors.Firmware("7.19", "7.20").Tone == ReadingTone.Warning, "New firmware");
+        Check(ReadingColors.Firmware("", "").Tone == ReadingTone.Unknown, "Unknown firmware is neutral");
+        Check(ReadingColors.Temperature("cpu2-temperature: 40 °C; board: 85 °C").Tone == ReadingTone.Critical, "Hottest sensor wins");
+        Check(ReadingColors.Temperature("70 C").Tone == ReadingTone.Warning, "Temperature boundary");
+        Check(ReadingColors.Temperature("Unavailable").Tone == ReadingTone.Unknown, "Missing temperature is neutral");
+        Check(ReadingColors.Fiber("-12dBm", "true").Tone == ReadingTone.Critical, "Signal loss flag");
+        Check(ReadingColors.Fiber("-12dBm", "no").Tone == ReadingTone.Good, "Clear flag");
+        Check(ReadingColors.Fiber("-12dBm", null).Tone == ReadingTone.Info, "Unknown optical limits are not healthy");
         await MonitoringRegressionTests.RunAsync(Path.Combine(directory, "monitoring"));
         await BackupRegressionTests.RunAsync(Path.Combine(directory, "parallel-backups"));
         // Fake device operations exercise dispatch without contacting a router.
@@ -53,7 +62,7 @@ internal static class RegressionTests
         // Construct every tab on the STA entry thread without showing the form or contacting routers.
         // Run form construction on its own STA thread after async dispatcher tests.
         Exception? uiFailure = null;
-        var uiThread = new Thread(() => { try { foreach (float scale in new[] { 1F, 1.25F, 1.5F, 2F }) { using var form = new MainForm(new SecureStore(Path.Combine(directory, "ui-" + scale)), smokeTest: true); form.RenderSmokeViews(scale); Check(form.Text.Contains("0.6.0"), "Dashboard and menus construct on Windows"); } } catch (Exception ex) { uiFailure = ex; } });
+        var uiThread = new Thread(() => { try { foreach (float scale in new[] { 1F, 1.25F, 1.5F, 2F }) { using var form = new MainForm(new SecureStore(Path.Combine(directory, "ui-" + scale)), smokeTest: true); form.RenderSmokeViews(scale); Check(form.Text.Contains("0.6.1"), "Dashboard and menus construct on Windows"); } } catch (Exception ex) { uiFailure = ex; } });
         uiThread.IsBackground = true; uiThread.SetApartmentState(ApartmentState.STA); uiThread.Start();
         Check(uiThread.Join(TimeSpan.FromMinutes(3)), "UI layout checks timed out; see ui-layout-check.log");
         Check(uiFailure is null, "Windows workspace construction: " + uiFailure);

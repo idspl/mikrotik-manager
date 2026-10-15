@@ -40,7 +40,7 @@ public sealed partial class MainForm : Form
         _store = store ?? new SecureStore();
         AppTheme.Set(_store.LoadSettings().Theme);
         _routerContextMenu = new ContextMenuStrip(_components);
-        Text = "MikroTik Manager 0.6.0";
+        Text = "MikroTik Manager 0.6.1";
         Font = new Font("Segoe UI", 9F);
         Icon = AppIcon.Current;
         Width = 1440;
@@ -189,8 +189,8 @@ public sealed partial class MainForm : Form
         var updatesMenu = new ToolStripDropDownButton("Help") { Alignment = ToolStripItemAlignment.Right };
         updatesMenu.DropDownItems.Add("Check for Updates", null, async (_, _) => await CheckForUpdatesAsync(true));
         updatesMenu.DropDownItems.Add(new ToolStripSeparator());
-        updatesMenu.DropDownItems.Add("About MikroTik Manager 0.6.0", null, (_, _) =>
-            MessageBox.Show("MikroTik Manager 0.6.0\n\nMade for MikroTik\nIndependent open-source software by Indigo Data Services Pvt Ltd.", Text,
+        updatesMenu.DropDownItems.Add("About MikroTik Manager 0.6.1", null, (_, _) =>
+            MessageBox.Show("MikroTik Manager 0.6.1\n\nMade for MikroTik\nIndependent open-source software by Indigo Data Services Pvt Ltd.", Text,
                 MessageBoxButtons.OK, MessageBoxIcon.Information));
         actions.Items.AddRange([inventoryMenu, selectionMenu, groupMenu, maintenanceMenu, upgradeMenu, updatesMenu]);
 
