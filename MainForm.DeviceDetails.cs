@@ -17,10 +17,34 @@ public sealed partial class MainForm
         TabPage overview = new TabPage("Overview"), interfaces = new TabPage("Interfaces"), versions = new TabPage("Versions"), backups = new TabPage("Backup History");
         tabs.TabPages.AddRange([overview, interfaces, versions, backups]);
         var metrics = new SmoothGrid { Dock = DockStyle.Fill }; ConfigureDashboardGrid(metrics, ["Property", "Value"]); overview.Controls.Add(metrics);
-        var versionText = new Label { Dock = DockStyle.Fill, Padding = new Padding(24), Text = $"Saved RouterOS: {router.RouterOsVersion}\n\nSaved firmware: {router.FirmwareVersion}\n\nUpgrade channel: {RouterChannels.Resolve(router, _store.LoadSettings())}\n\nLast version check: {router.LastCheckedAt:g}", Font = new Font("Segoe UI", 12) }; versions.Controls.Add(versionText);
+        var versionGrid = new SmoothGrid { Dock = DockStyle.Fill }; ConfigureDashboardGrid(versionGrid, ["Property", "Value"]); versions.Controls.Add(versionGrid);
+        ReplaceItems(versionGrid, [["RouterOS", router.RouterOsVersion], ["current-firmware", router.FirmwareVersion], ["upgrade-firmware", router.AvailableFirmware], ["Last version check", $"{router.LastCheckedAt:g}"]]);
+        void ColorMetrics(DataGridView grid, DataGridViewCellFormattingEventArgs e)
+        {
+            if (e.RowIndex < 0 || e.ColumnIndex != 1) return;
+            string key = grid.Rows[e.RowIndex].Cells[0].Value?.ToString() ?? "";
+            if (key.Contains("temperature", StringComparison.OrdinalIgnoreCase)) ReadingColors.Apply(grid, e, ReadingColors.Temperature(e.Value?.ToString() ?? ""));
+            if (key == "current-firmware")
+            {
+                string available = grid.Rows.Cast<DataGridViewRow>().FirstOrDefault(r => r.Cells[0].Value?.ToString() == "upgrade-firmware")?.Cells[1].Value?.ToString() ?? "";
+                ReadingColors.Apply(grid, e, ReadingColors.Firmware(e.Value?.ToString() ?? "", available));
+            }
+        }
+        metrics.CellFormatting += (_, e) => ColorMetrics(metrics, e);
+        versionGrid.CellFormatting += (_, e) => ColorMetrics(versionGrid, e);
         var history = new SmoothGrid { Dock = DockStyle.Fill, ReadOnly = true, AllowUserToAddRows = false, DataSource = router.Backups.OrderByDescending(b => b.CreatedAt).ToList(), AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.DisplayedCells }; StyleGrid(history); backups.Controls.Add(history);
         var ports = new SmoothGrid { Dock = DockStyle.Fill, ReadOnly = true, AllowUserToAddRows = false, SelectionMode = DataGridViewSelectionMode.FullRowSelect, MultiSelect = false, AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill }; StyleGrid(ports);
-        var sample = new TextBox { Dock = DockStyle.Bottom, Height = 140, Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Vertical, Text = "Select a port, then Read Traffic / Optics. Missing sensor readings are shown as unavailable." };
+        var sample = new SmoothGrid { Dock = DockStyle.Bottom, Height = 220 }; ConfigureDashboardGrid(sample, ["Reading", "Value"]);
+        ReplaceItems(sample, [["Traffic / optics", "Select a port and read its sensors"]]);
+        sample.CellFormatting += (_, e) => {
+            ColorMetrics(sample, e);
+            if (e.RowIndex < 0 || e.ColumnIndex != 1) return;
+            string key = sample.Rows[e.RowIndex].Cells[0].Value?.ToString() ?? "";
+            if (key is not ("sfp-rx-power" or "sfp-tx-power")) return;
+            string flag = key == "sfp-rx-power" ? "sfp-rx-loss" : "sfp-tx-fault";
+            string? fault = sample.Rows.Cast<DataGridViewRow>().FirstOrDefault(r => r.Cells[0].Value?.ToString() == flag)?.Cells[1].Value?.ToString();
+            ReadingColors.Apply(sample, e, ReadingColors.Fiber(e.Value?.ToString() ?? "", fault));
+        };
         var bar = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, Padding = new Padding(12) };
         var status = new Label { AutoSize = true, Padding = new Padding(10, 8, 0, 0), Text = "Not checked" };
         var refresh = new Button { Text = "Refresh Device", AutoSize = true };
@@ -49,7 +73,7 @@ public sealed partial class MainForm
                 if (!_operationInProgress) { router.LastSeenAt = checkedAt; SaveRouters(); }
                 data.fields.Add(["Last checked", checkedAt.ToString("g")]); data.fields.Add(["Last successfully seen", checkedAt.ToString("g")]);
                 ReplaceItems(metrics, data.fields.ToArray()); ports.DataSource = data.list;
-                versionText.Text = string.Join("\n\n", data.fields.Where(f => f[0] is "version" or "current-firmware" or "upgrade-firmware").Select(f => f[0] + ": " + f[1])) + "\n\nUpgrade channel: " + RouterChannels.Resolve(router, _store.LoadSettings());
+                ReplaceItems(versionGrid, data.fields.Where(f => f[0] is "version" or "current-firmware" or "upgrade-firmware").Concat(new[] { new[] { "Upgrade channel", RouterChannels.Resolve(router, _store.LoadSettings()) }, new[] { "Checked", checkedAt.ToString("g") } }).ToArray());
                 status.Text = $"Snapshot at {checkedAt:T} • CPU %; memory/storage in bytes";
             }
             catch (Exception ex) { if (!dialog.IsDisposed) status.Text = $"Check failed at {checkedAt:T}; last seen {router.LastSeenAt:g}: {ex.Message}"; }
@@ -63,16 +87,16 @@ public sealed partial class MainForm
             {
                 var values = await Task.Run(async () => {
                     await using var api = await RouterOsApiClient.ConnectAsync(router, _store.LoadSettings(), cancellation.Token);
-                    var output = new List<string>();
+                    var output = new List<string[]>();
                     foreach (var r in await api.ExecuteAsync("/interface/monitor-traffic", cancellation.Token, "interface=" + port.Name, "once="))
-                        if (r.Type == "!re") foreach (string key in new[] { "rx-bits-per-second", "tx-bits-per-second" }) output.Add(key + ": " + (r.Attributes.GetValueOrDefault(key) ?? "Unavailable"));
+                        if (r.Type == "!re") foreach (string key in new[] { "rx-bits-per-second", "tx-bits-per-second" }) output.Add([key, r.Attributes.GetValueOrDefault(key) ?? "Unavailable"]);
                     if (port.Type == "ether")
-                        try { foreach (var r in await api.ExecuteAsync("/interface/ethernet/monitor", cancellation.Token, "numbers=" + port.Name, "once=")) if (r.Type == "!re") foreach (string key in new[] { "status", "rate", "full-duplex", "sfp-rx-power", "sfp-tx-power", "sfp-temperature", "sfp-supply-voltage" }) output.Add(key + ": " + (r.Attributes.GetValueOrDefault(key) ?? "Unavailable")); } catch (RouterOsApiException) { output.Add("Ethernet optics unavailable / permission denied"); }
-                    return string.Join(Environment.NewLine, output);
+                        try { foreach (var r in await api.ExecuteAsync("/interface/ethernet/monitor", cancellation.Token, "numbers=" + port.Name, "once=")) if (r.Type == "!re") foreach (string key in new[] { "status", "rate", "full-duplex", "sfp-rx-power", "sfp-tx-power", "sfp-temperature", "sfp-supply-voltage", "sfp-rx-loss", "sfp-tx-fault" }) output.Add([key, r.Attributes.GetValueOrDefault(key) ?? "Unavailable"]); } catch (RouterOsApiException) { output.Add(["Optics", "Unavailable / permission denied"]); }
+                    return output.ToArray();
                 }, cancellation.Token);
-                if (!dialog.IsDisposed) sample.Text = port.Name + " • " + DateTime.Now.ToString("T") + Environment.NewLine + values;
+                if (!dialog.IsDisposed) ReplaceItems(sample, new[] { new[] { "Port / checked", port.Name + " • " + DateTime.Now.ToString("T") } }.Concat(values).ToArray());
             }
-            catch (Exception ex) { if (!dialog.IsDisposed) sample.Text = ex.Message; }
+            catch (Exception ex) { if (!dialog.IsDisposed) ReplaceItems(sample, [["Read failed", ex.Message]]); }
             finally { busy = false; if (!dialog.IsDisposed) refresh.Enabled = readPort.Enabled = true; }
         };
         dialog.FormClosing += (_, _) => cancellation.Cancel();

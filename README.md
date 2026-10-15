@@ -1,3 +1,10 @@
+## v0.6.1 — Color-coded readings
+
+- Firmware cells: green matches firmware bundled in installed RouterOS; amber newer firmware available; blue differing version requiring review; grey unknown.
+- Temperature cells in Health and Device Details: green below 70°C, amber 70–84.9°C, red 85°C or above. These are advisory bands, not manufacturer/model safety limits. Stale health temperatures remain grey.
+- Fiber RX/TX power cells: green when the corresponding signal-loss/transmitter-fault flag is clear; red when set; blue when a reading exists but flag is unknown; grey unavailable. This does not assess module-specific optical power margins.
+- Traffic/optics and firmware details use readable tables with tooltips and colors that remain visible when selected, in both themes.
+
 # MikroTik Manager 0.6.0
 
 [![Windows build](https://github.com/idspl/mikrotik-manager/actions/workflows/windows-build.yml/badge.svg)](https://github.com/idspl/mikrotik-manager/actions/workflows/windows-build.yml)

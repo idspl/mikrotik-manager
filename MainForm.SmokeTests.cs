@@ -10,7 +10,7 @@ public sealed partial class MainForm
         _suspendRouterSaves = true; _routers.RaiseListChangedEvents = false;
         for (int i = 0; i < (scale == 1F ? 1000 : 57); i++) _routers.Add(new RouterRecord {
             Name = $"Client-{i + 1:0000}", Host = $"192.0.{2 + i / 250}.{1 + i % 250}", Site = i % 2 == 0 ? "Davanagere" : "Shivamogga",
-            Group = "Client-end", Tags = "Customer", Model = "RB750Gr3", ApiStatus = i % 7 == 0 ? "Failed" : "Online", RouterOsVersion = "7.24.4", FirmwareVersion = "7.24.4", LastStatus = "Snapshot fixture" });
+            Group = "Client-end", Tags = "Customer", Model = "RB750Gr3", ApiStatus = i % 7 == 0 ? "Failed" : "Online", RouterOsVersion = "7.24.4", FirmwareVersion = "7.24.4", AvailableFirmware = i % 2 == 0 ? "7.24.4" : "7.24.5", LastStatus = "Snapshot fixture" });
         _routers.RaiseListChangedEvents = true; _routers.ResetBindings();
         RefreshDashboard();
         Show(); Application.DoEvents();
@@ -75,7 +75,25 @@ public sealed partial class MainForm
             File.WriteAllText($"ui-{(int)(scale * 100)}-schedule-dialog.base64", Convert.ToBase64String(stream.ToArray()));
             dialog.Close();
         }
-        if (scale == 1.5F) VerifyThemeSwitch(Capture);
+        if (scale == 1.5F)
+        {
+            VerifyThemeSwitch(Capture);
+            using var preview = new DpiDialog { Text = "Reading colors — fixture", Width = 900, Height = 460 };
+            var grid = new SmoothGrid { Dock = DockStyle.Fill }; ConfigureDashboardGrid(grid, ["Reading", "Value"]); preview.Controls.Add(grid);
+            var rows = new[] { new[] { "Firmware: up to date", "7.20" }, new[] { "Firmware: update available", "7.19" }, new[] { "Temperature: normal advisory", "42 °C" }, new[] { "Temperature: warm advisory", "75 °C" }, new[] { "Temperature: hot advisory", "90 °C" }, new[] { "Fiber: no loss reported", "-12dBm" }, new[] { "Fiber: loss reported", "-40dBm" }, new[] { "Fiber: status unknown", "-12dBm" }, new[] { "Temperature: unavailable", "Unavailable" } };
+            var assessments = new[] { ReadingColors.Firmware("7.20", "7.20"), ReadingColors.Firmware("7.19", "7.20"), ReadingColors.Temperature("42 C"), ReadingColors.Temperature("75 C"), ReadingColors.Temperature("90 C"), ReadingColors.Fiber("-12dBm", "no"), ReadingColors.Fiber("-40dBm", "yes"), ReadingColors.Fiber("-12dBm", null), ReadingColors.Temperature("Unavailable") };
+            grid.CellFormatting += (_, e) => { if (e.RowIndex >= 0 && e.ColumnIndex == 1) ReadingColors.Apply(grid, e, assessments[e.RowIndex]); };
+            ReplaceItems(grid, rows); preview.Show(this); Application.DoEvents();
+            foreach (string theme in new[] { "Dark", "Light" })
+            {
+                AppTheme.Set(theme); AppTheme.Apply(preview); grid.Rows[3].Selected = true; Application.DoEvents();
+                if (grid.Rows[3].Cells[1].InheritedStyle is null) throw new Exception("Missing cell style");
+                using var bitmap = new Bitmap(preview.Width, preview.Height); preview.DrawToBitmap(bitmap, new Rectangle(Point.Empty, bitmap.Size));
+                using var stream = new MemoryStream(); bitmap.Save(stream, System.Drawing.Imaging.ImageFormat.Png);
+                File.WriteAllText($"ui-150-colors-{theme}.base64", Convert.ToBase64String(stream.ToArray()));
+            }
+            preview.Close();
+        }
         Hide();
     }
     // Geometry + typography stress fixtures; these do not emulate monitor switching.
