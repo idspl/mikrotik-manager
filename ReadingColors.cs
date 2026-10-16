@@ -7,16 +7,22 @@ internal enum ReadingTone { Unknown, Good, Warning, Critical, Info }
 internal sealed record ReadingAssessment(ReadingTone Tone, string Detail);
 internal static class ReadingColors
 {
-    internal static ReadingAssessment Firmware(string current, string available)
+    internal static ReadingAssessment Firmware(string current, string latest, string channel = "stable")
     {
-        static string VersionText(string value) => value.Trim().Split(' ')[0];
-        string a = VersionText(current), b = VersionText(available);
-        if (!Version.TryParse(a, out _) || !Version.TryParse(b, out _)) return new(ReadingTone.Unknown, "Firmware not checked or not supported");
-        if (a == b) return new(ReadingTone.Good, "Up to date with firmware bundled in installed RouterOS");
-        return ReleaseVersion.IsNewerSameMajor(b, a)
-            ? new(ReadingTone.Warning, "Firmware update available: " + available)
-            : new(ReadingTone.Info, "Firmware differs from available version: " + available + "; review before upgrading");
+        static string? Normalize(string text)
+        {
+            var m = Regex.Match(text.Trim(), @"^(\d+)\.(\d+)(?:\.(\d+))?((?:beta|rc)\d+)?(?:\s+\([^)]*\))?$", RegexOptions.IgnoreCase);
+            if (!m.Success) return null;
+            return $"{m.Groups[1].Value}.{m.Groups[2].Value}.{(m.Groups[3].Success ? m.Groups[3].Value : "0")}{m.Groups[4].Value.ToLowerInvariant()}";
+        }
+        string? installed = Normalize(current), target = Normalize(latest);
+        if (installed is null || target is null) return new(ReadingTone.Unknown, $"Latest {channel} release or installed version unavailable; refresh MikroTik releases and device versions");
+        return installed == target
+            ? new(ReadingTone.Good, $"Matches latest published {channel} release: {latest}")
+            : new(ReadingTone.Warning, $"Does not match latest published {channel} release: {latest}. Installed: {current}. Review upgrade compatibility before changing versions.");
     }
+    internal static string ChannelTarget(RouterOsReleases? releases, string channel) => channel switch {
+        "stable" => releases?.Stable ?? "", "long-term" => releases?.LongTerm ?? "", "testing" => releases?.Testing ?? "", _ => "" };
     internal static ReadingAssessment Temperature(string value)
     {
         // Parse values after sensor names, never digits embedded in names (e.g. cpu2).

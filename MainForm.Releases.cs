@@ -10,6 +10,18 @@ public sealed partial class MainForm
     private readonly ToolStripLabel _releaseChecked = new("Not checked") { ForeColor = Color.DimGray };
     private readonly ToolStripButton _refreshReleases = new("Refresh");
     private RouterOsReleases? _publishedReleases;
+    private string _defaultReleaseChannel = "stable";
+    private ReadingAssessment PublishedVersionStatus(RouterRecord router, string installed)
+    {
+        string channel = string.IsNullOrWhiteSpace(router.UpdateChannel) ? _defaultReleaseChannel : router.UpdateChannel;
+        return ReadingColors.Firmware(installed, ReadingColors.ChannelTarget(_publishedReleases, channel), channel);
+    }
+    private void FormatPublishedVersion(object? sender, DataGridViewCellFormattingEventArgs e)
+    {
+        if (e.RowIndex < 0 || e.ColumnIndex < 0 || _routerGrid.Rows[e.RowIndex].DataBoundItem is not RouterRecord router) return;
+        if (_routerGrid.Columns[e.ColumnIndex].DataPropertyName is nameof(RouterRecord.FirmwareVersion) or nameof(RouterRecord.RouterOsVersion))
+            ReadingColors.Apply(_routerGrid, e, PublishedVersionStatus(router, e.Value?.ToString() ?? ""));
+    }
     private bool _refreshingReleases;
     private DateTime? _releaseCheckedAt;
 
@@ -51,12 +63,13 @@ public sealed partial class MainForm
         catch (Exception)
         {
             if (IsDisposed || Disposing) return;
+            _publishedReleases = null; // Failed refresh must not retain a green latest-release claim.
             _releaseChecked.Text = _releaseCheckedAt is null ? "Unavailable — retry Refresh" : $"Stale — last checked {_releaseCheckedAt:dd MMM HH:mm}";
         }
         finally
         {
             _refreshingReleases = false;
-            if (!IsDisposed && !Disposing) { _refreshReleases.Enabled = true; RefreshDashboard(); }
+            if (!IsDisposed && !Disposing) { _refreshReleases.Enabled = true; _routerGrid.Invalidate(); RefreshDashboard(); }
         }
     }
 }

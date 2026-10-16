@@ -12,6 +12,10 @@ public sealed partial class MainForm
             Name = $"Client-{i + 1:0000}", Host = $"192.0.{2 + i / 250}.{1 + i % 250}", Site = i % 2 == 0 ? "Davanagere" : "Shivamogga",
             Group = "Client-end", Tags = "Customer", Model = "RB750Gr3", ApiStatus = i % 7 == 0 ? "Failed" : "Online", RouterOsVersion = "7.24.4", FirmwareVersion = "7.24.4", AvailableFirmware = i % 2 == 0 ? "7.24.4" : "7.24.5", LastStatus = "Snapshot fixture" });
         _routers.RaiseListChangedEvents = true; _routers.ResetBindings();
+        _publishedReleases = new RouterOsReleases("7.24.5", "7.24.4", "7.25beta1");
+        _routers[0].UpdateChannel = "long-term";
+        if (PublishedVersionStatus(_routers[0], "7.24.4").Tone != ReadingTone.Good || PublishedVersionStatus(_routers[1], "7.24.4").Tone != ReadingTone.Warning)
+            throw new Exception("Inventory colors must use channel releases, not bundled firmware");
         RefreshDashboard();
         Show(); Application.DoEvents();
         ApplyLayoutTestScale(this, scale);

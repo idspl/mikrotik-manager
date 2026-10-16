@@ -39,8 +39,9 @@ public sealed partial class MainForm : Form
         AutoScaleMode = AutoScaleMode.Dpi;
         _store = store ?? new SecureStore();
         AppTheme.Set(_store.LoadSettings().Theme);
+        _defaultReleaseChannel = _store.LoadSettings().UpdateChannel;
         _routerContextMenu = new ContextMenuStrip(_components);
-        Text = "MikroTik Manager 0.6.1";
+        Text = "MikroTik Manager 0.6.2";
         Font = new Font("Segoe UI", 9F);
         Icon = AppIcon.Current;
         Width = 1440;
@@ -106,6 +107,7 @@ public sealed partial class MainForm : Form
         StartUiPump();
         Controls.Add(status);
         StyleGrid(_routerGrid); StyleGrid(_jobGrid); StyleGrid(_progressGrid);
+        _routerGrid.CellFormatting += FormatPublishedVersion;
         tabs.SelectedIndexChanged += (_, _) => RefreshDashboard();
         var dashboardTimer = new System.Windows.Forms.Timer(_components) { Interval = 5000 };
         dashboardTimer.Tick += (_, _) => { if (_tabs.SelectedTab == _dashboardPage) RefreshDashboard(); };
@@ -189,8 +191,8 @@ public sealed partial class MainForm : Form
         var updatesMenu = new ToolStripDropDownButton("Help") { Alignment = ToolStripItemAlignment.Right };
         updatesMenu.DropDownItems.Add("Check for Updates", null, async (_, _) => await CheckForUpdatesAsync(true));
         updatesMenu.DropDownItems.Add(new ToolStripSeparator());
-        updatesMenu.DropDownItems.Add("About MikroTik Manager 0.6.1", null, (_, _) =>
-            MessageBox.Show("MikroTik Manager 0.6.1\n\nMade for MikroTik\nIndependent open-source software by Indigo Data Services Pvt Ltd.", Text,
+        updatesMenu.DropDownItems.Add("About MikroTik Manager 0.6.2", null, (_, _) =>
+            MessageBox.Show("MikroTik Manager 0.6.2\n\nMade for MikroTik\nIndependent open-source software by Indigo Data Services Pvt Ltd.", Text,
                 MessageBoxButtons.OK, MessageBoxIcon.Information));
         actions.Items.AddRange([inventoryMenu, selectionMenu, groupMenu, maintenanceMenu, upgradeMenu, updatesMenu]);
 
@@ -452,6 +454,8 @@ public sealed partial class MainForm : Form
                 HealthPollMinutes = (int)healthPoll.Value
             };
             _store.SaveSettings(value);
+            _defaultReleaseChannel = value.UpdateChannel;
+            _routerGrid.Invalidate();
             _failureBehavior.SelectedItem = value.DefaultFailureBehavior;
             _retryCount.Value = value.RetryCount;
             foreach (RouterRecord router in _routers.Where(x => x.ApiPort is 8728 or 8729)) router.ApiPort = value.DefaultApiPort;
