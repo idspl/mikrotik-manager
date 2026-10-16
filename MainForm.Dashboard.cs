@@ -122,10 +122,6 @@ public sealed partial class MainForm
         grid.CellFormatting += (_, e) => {
             if (e.RowIndex < 0 || e.ColumnIndex < 0) return;
             string property = grid.Columns[e.ColumnIndex].DataPropertyName;
-            if (property == nameof(RouterRecord.FirmwareVersion) && grid.Rows[e.RowIndex].DataBoundItem is RouterRecord router)
-            {
-                ReadingColors.Apply(grid, e, ReadingColors.Firmware(router.FirmwareVersion, router.AvailableFirmware)); return;
-            }
             if (property == "Temperature")
             {
                 var assessment = grid.Rows[e.RowIndex].DataBoundItem is HealthRow health && health.Status != "Online"

@@ -1,6 +1,10 @@
+## v0.6.2 — Compare version colors with the published release channel
+
+RouterOS and firmware cells now compare each installed version against the latest published MikroTik release for the device's configured channel (Stable, Long-term or Testing). Devices inheriting settings use the default channel. Green means a matching release; amber means a different release, including an installed version ahead of the selected channel. Missing/failed release checks remain neutral. Refresh the release strip to recheck; tooltips show the target channel and version. The comparison also applies in Device Details and supports beta/RC versions. Bundled RouterBOARD firmware is no longer used as the color target. Maintenance compatibility checks and upgrade commands remain unchanged.
+
 ## v0.6.1 — Color-coded readings
 
-- Firmware cells: green matches firmware bundled in installed RouterOS; amber newer firmware available; blue differing version requiring review; grey unknown.
+- Firmware colors introduced here were corrected in v0.6.2 to compare with published channel releases (see above).
 - Temperature cells in Health and Device Details: green below 70°C, amber 70–84.9°C, red 85°C or above. These are advisory bands, not manufacturer/model safety limits. Stale health temperatures remain grey.
 - Fiber RX/TX power cells: green when the corresponding signal-loss/transmitter-fault flag is clear; red when set; blue when a reading exists but flag is unknown; grey unavailable. This does not assess module-specific optical power margins.
 - Traffic/optics and firmware details use readable tables with tooltips and colors that remain visible when selected, in both themes.

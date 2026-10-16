@@ -24,10 +24,9 @@ public sealed partial class MainForm
             if (e.RowIndex < 0 || e.ColumnIndex != 1) return;
             string key = grid.Rows[e.RowIndex].Cells[0].Value?.ToString() ?? "";
             if (key.Contains("temperature", StringComparison.OrdinalIgnoreCase)) ReadingColors.Apply(grid, e, ReadingColors.Temperature(e.Value?.ToString() ?? ""));
-            if (key == "current-firmware")
+            if (key is "current-firmware" or "version" or "RouterOS")
             {
-                string available = grid.Rows.Cast<DataGridViewRow>().FirstOrDefault(r => r.Cells[0].Value?.ToString() == "upgrade-firmware")?.Cells[1].Value?.ToString() ?? "";
-                ReadingColors.Apply(grid, e, ReadingColors.Firmware(e.Value?.ToString() ?? "", available));
+                ReadingColors.Apply(grid, e, PublishedVersionStatus(router, e.Value?.ToString() ?? ""));
             }
         }
         metrics.CellFormatting += (_, e) => ColorMetrics(metrics, e);
