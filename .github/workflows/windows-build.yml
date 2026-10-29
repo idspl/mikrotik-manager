@@ -39,6 +39,14 @@ jobs:
         timeout-minutes: 6
         shell: pwsh
         run: ./installer/Test-Installer.ps1
+      - name: Installer diagnostics
+        if: failure()
+        shell: pwsh
+        run: |
+          Get-Content "$env:TEMP/MikroTikManager-setup.log" -ErrorAction SilentlyContinue
+          Get-Content "$env:ProgramFiles/Indigo/MikroTik Manager/setup-service.log" -ErrorAction SilentlyContinue
+          Get-ChildItem "$env:ProgramFiles/Indigo/MikroTik Manager" -ErrorAction SilentlyContinue | Select-Object Name
+          Get-Service *MikroTik* -ErrorAction SilentlyContinue
       - name: Capture workspace previews
         if: always()
         shell: pwsh

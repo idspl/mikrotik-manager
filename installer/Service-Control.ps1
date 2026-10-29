@@ -1,5 +1,6 @@
 param([ValidateSet('Install','Stop','Remove')][string]$Action)
 $ErrorActionPreference = 'Stop'
+Start-Transcript -Path (Join-Path $PSScriptRoot 'setup-service.log') -Append | Out-Null
 $name = 'IndigoMikroTikScheduler'
 $exe = Join-Path $PSScriptRoot 'MikroTikManager.exe'
 function Invoke-Sc([string[]]$Arguments) {

@@ -65,5 +65,5 @@ internal sealed class SchedulerWindowsService : ServiceBase
         // Drain API/file work before SCM reports stopped; installer never force-kills jobs.
         while (_worker is { IsAlive: true }) { RequestAdditionalTime(15000); _worker.Join(1000); }
     }
-    protected override void OnShutdown() => OnStop();
+    protected override void OnShutdown() { _stop.Cancel(); _worker?.Join(20000); }
 }
