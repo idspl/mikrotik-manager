@@ -31,6 +31,7 @@ Source: "installed.mode"; DestDir: "{app}"; Flags: ignoreversion
 Name: "{group}\MikroTik Manager"; Filename: "{app}\MikroTikManager.exe"
 Name: "{commondesktop}\MikroTik Manager"; Filename: "{app}\MikroTikManager.exe"
 [Code]
+var ServiceSetupFailed: Boolean;
 function ServiceAction(Action: String): Boolean;
 var ResultCode: Integer;
 begin
@@ -50,7 +51,14 @@ end;
 procedure CurStepChanged(CurStep: TSetupStep);
 begin
   if CurStep = ssPostInstall then
-    if not ServiceAction('Install') then RaiseException('Scheduler configuration failed. Run Setup again to repair. Existing router data has been retained.');
+    if not ServiceAction('Install') then begin
+      ServiceSetupFailed := True;
+      RaiseException('Scheduler configuration failed. Run Setup again to repair. Existing router data has been retained.');
+    end;
+end;
+function GetCustomSetupExitCode(): Integer;
+begin
+  if ServiceSetupFailed then Result := 1 else Result := 0;
 end;
 function InitializeUninstall(): Boolean;
 begin
