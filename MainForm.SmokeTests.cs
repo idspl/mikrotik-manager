@@ -55,7 +55,25 @@ public sealed partial class MainForm
         FlushUiUpdates(); Application.DoEvents();
         if (_routerGrid.FirstDisplayedScrollingRowIndex != scroll || !_routerGrid.SelectedRows.Cast<DataGridViewRow>().Select(r => r.Index).SequenceEqual(selected))
             throw new Exception("Progress changed inventory scroll or selection.");
+        if (_routerGrid.Rows.Cast<DataGridViewRow>().Any(r => r.Height < _routerGrid.Font.Height + 8))
+            throw new Exception("Inventory row text lacks vertical padding at " + scale);
         Capture("devices");
+        using (var splash = new SplashForm(preview: true))
+        {
+            splash.Show(); ApplyLayoutTestScale(splash, scale); Application.DoEvents();
+            var panel = splash.Controls.OfType<TableLayoutPanel>().Single();
+            var labels = panel.Controls.OfType<Label>().ToList();
+            foreach (var label in labels)
+            {
+                if (label.Height < label.GetPreferredSize(new Size(label.Width, 0)).Height || label.Bottom > panel.ClientSize.Height - panel.Padding.Bottom)
+                    throw new Exception("Splash text clips at " + scale);
+                if (labels.Any(other => other != label && other.Bounds.IntersectsWith(label.Bounds))) throw new Exception("Splash text overlaps");
+            }
+            using var bitmap = new Bitmap(splash.Width, splash.Height); splash.DrawToBitmap(bitmap, new Rectangle(Point.Empty, bitmap.Size));
+            using var stream = new MemoryStream(); bitmap.Save(stream, System.Drawing.Imaging.ImageFormat.Png);
+            File.WriteAllText($"ui-{(int)(scale * 100)}-splash.base64", Convert.ToBase64String(stream.ToArray()));
+            splash.Close();
+        }
         _tabs.SelectedTab = _maintenancePage; Capture("progress");
         _tabs.SelectedTab = _schedulesPage; Capture("schedules");
         _tabs.SelectedTab = _tabs.TabPages.Cast<TabPage>().Single(p => p.Text == "Backups");
