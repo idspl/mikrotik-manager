@@ -1,0 +1,11 @@
+MikroTik Manager - installed mode
+
+Setup installs the Indigo MikroTik Scheduler Windows service with delayed automatic startup. It runs saved schedules while the desktop is closed or nobody is logged in. The PC must remain powered on and able to reach the routers; the service does not wake a sleeping PC.
+
+Existing ProgramData inventory, credentials, settings, schedules and backup history are retained. Windows scheduled tasks belonging to this app are archived and removed after the service starts. Administrator access is required to open the installed app and protect shared credentials.
+
+While the desktop is open it owns the scheduler. While a background job is active, wait for it to finish before opening the desktop. Interrupted jobs require review; they are not replayed automatically. Overdue jobs run when the scheduler next becomes available, subject to the saved cutoff.
+
+Uninstall removes the program and service, but preserves ProgramData and downloaded backups. Reinstall to resume unattended scheduling. The portable executable remains available separately.
+
+MikroTik, RouterOS, RouterBOARD and WinBox are trademarks of MikroTikls SIA. This independent Indigo project is not affiliated with or endorsed by MikroTikls SIA.

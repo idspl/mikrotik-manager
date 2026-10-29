@@ -13,7 +13,7 @@ internal static class SelfUpdater
     public static async Task<string> DownloadAsync(string expectedVersion, CancellationToken ct, IProgress<string>? progress = null)
     {
         using var client = new HttpClient { Timeout = TimeSpan.FromMinutes(10) };
-        client.DefaultRequestHeaders.UserAgent.ParseAdd("MikroTikManager-Updater/0.6.2");
+        client.DefaultRequestHeaders.UserAgent.ParseAdd("MikroTikManager-Updater/0.7.0");
         string json = await client.GetStringAsync("https://api.github.com/repos/idspl/mikrotik-manager/releases/latest", ct);
         using var doc = JsonDocument.Parse(json);
         var root = doc.RootElement;
@@ -29,13 +29,14 @@ internal static class SelfUpdater
                 throw new InvalidOperationException("Unexpected release download address.");
             return url;
         }
-        string checksum = await client.GetStringAsync(Asset("MikroTikManager.exe.sha256.txt"), ct);
+        string assetName = InstalledMode.Enabled ? "MikroTikManager-Setup.exe" : "MikroTikManager.exe";
+        string checksum = await client.GetStringAsync(Asset(assetName + ".sha256.txt"), ct);
         string hash = checksum.Trim().Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)[0];
         if (!Regex.IsMatch(hash, "\\A[0-9a-fA-F]{64}\\z")) throw new InvalidOperationException("Invalid release checksum.");
         string directory = Path.Combine(Path.GetTempPath(), "MikroTikManager-update-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(directory);
-        string path = Path.Combine(directory, "MikroTikManager.exe");
-        using var response = await client.GetAsync(Asset("MikroTikManager.exe"), HttpCompletionOption.ResponseHeadersRead, ct);
+        string path = Path.Combine(directory, assetName);
+        using var response = await client.GetAsync(Asset(assetName), HttpCompletionOption.ResponseHeadersRead, ct);
         response.EnsureSuccessStatusCode();
         await using (var output = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None,
             131072, FileOptions.Asynchronous | FileOptions.SequentialScan))
@@ -68,7 +69,7 @@ internal static class SelfUpdater
             throw new InvalidOperationException("Checksum mismatch. The downloaded executable will not be installed.");
         // Helper is the currently running (known) build, not unverified code fetched separately.
         progress?.Report("Checksum verified. Preparing update helper...");
-        File.Copy(Environment.ProcessPath!, Path.Combine(directory, "UpdateHelper.exe"));
+        if (!InstalledMode.Enabled) File.Copy(Environment.ProcessPath!, Path.Combine(directory, "UpdateHelper.exe"));
         return path;
     }
 
@@ -89,6 +90,12 @@ internal static class SelfUpdater
 
     public static void StartReplacement(string downloaded)
     {
+        if (InstalledMode.Enabled)
+        {
+            _ = Process.Start(new ProcessStartInfo(downloaded) { UseShellExecute = true, Verb = "runas" })
+                ?? throw new InvalidOperationException("Could not start Setup.");
+            return;
+        }
         string target = Environment.ProcessPath ?? throw new InvalidOperationException("Application path unavailable.");
         // Verify write permission before closing the working application. Do not silently elevate.
         string probe = Path.Combine(Path.GetDirectoryName(target)!, ".mikrotik-update-" + Guid.NewGuid().ToString("N"));

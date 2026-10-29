@@ -6,6 +6,18 @@ namespace MikroTikManager;
 internal sealed class SmoothGrid : DataGridView
 {
     public SmoothGrid() { DoubleBuffered = true; AutoSizeRowsMode = DataGridViewAutoSizeRowsMode.None; }
+    internal void UpdateRowMetrics()
+    {
+        int height = Math.Max((int)Math.Ceiling(30 * DeviceDpi / 96d), Font.Height + Math.Max(10, Font.Height / 2));
+        RowTemplate.Height = height;
+        DefaultCellStyle.Padding = new Padding(Math.Max(4, DeviceDpi / 24), 0, Math.Max(4, DeviceDpi / 24), 0);
+        foreach (DataGridViewRow row in Rows) if (row.Height != height) row.Height = height;
+        ColumnHeadersHeight = Math.Max(height + 4, ColumnHeadersDefaultCellStyle.Font?.Height + 14 ?? height + 4);
+    }
+    protected override void OnHandleCreated(EventArgs e) { base.OnHandleCreated(e); UpdateRowMetrics(); }
+    protected override void OnFontChanged(EventArgs e) { base.OnFontChanged(e); if (IsHandleCreated) UpdateRowMetrics(); }
+    protected override void OnDpiChangedAfterParent(EventArgs e) { base.OnDpiChangedAfterParent(e); UpdateRowMetrics(); }
+    protected override void OnDataBindingComplete(DataGridViewBindingCompleteEventArgs e) { base.OnDataBindingComplete(e); if (IsHandleCreated) UpdateRowMetrics(); }
 }
 
 public sealed partial class MainForm
@@ -64,56 +76,56 @@ public sealed partial class MainForm
 
     private Control BuildNavigation()
     {
-        var side = new Panel { Name = "Navigation", Dock = DockStyle.Left, Width = 200, BackColor = Color.FromArgb(23, 39, 62), Padding = new Padding(12) };
+        var side = new Panel { Name = "Navigation", Dock = DockStyle.Left, Width = 182, BackColor = Color.FromArgb(23, 39, 62), Padding = new Padding(12) };
         var scroll = new Panel { Dock = DockStyle.Fill, AutoScroll = true };
         var list = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 1, Padding = Padding.Empty, Margin = Padding.Empty };
         list.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        list.Controls.Add(new Label { Text = "INDIGO\nMikroTik\nManager", ForeColor = Color.White, Font = new Font("Segoe UI", 11, FontStyle.Bold), AutoSize = true, Dock = DockStyle.Fill, Margin = new Padding(0, 0, 0, 16), Padding = new Padding(4, 12, 0, 8) });
+        list.Controls.Add(new Label { Text = "INDIGO\nMikroTik Manager", ForeColor = Color.White, Font = new Font("Segoe UI", 11, FontStyle.Bold), AutoSize = true, Dock = DockStyle.Fill, Margin = new Padding(0, 0, 0, 16), Padding = new Padding(4, 12, 0, 8) });
         var buttons = new List<(Button Button, TabPage Page)>();
         foreach (TabPage page in _tabs.TabPages)
         {
             string title = page.Text == "Maintenance Progress" ? "Maintenance" : page.Text;
-            var button = new NavigationButton { Section = page.Text, Text = title, Dock = DockStyle.Fill, AutoSize = true, MinimumSize = new Size(0, 42), FlatStyle = FlatStyle.Flat, TextAlign = ContentAlignment.MiddleLeft,
-                Padding = new Padding(34, 8, 8, 8), ForeColor = Color.White, BackColor = side.BackColor, Margin = new Padding(0, 3, 0, 3), Cursor = Cursors.Hand };
+            var button = new NavigationButton { Section = page.Text, Text = title, Dock = DockStyle.Fill, AutoSize = true, MinimumSize = new Size(0, 36), FlatStyle = FlatStyle.Flat, TextAlign = ContentAlignment.MiddleLeft,
+                Padding = new Padding(34, 4, 8, 4), ForeColor = Color.White, BackColor = side.BackColor, Margin = new Padding(0, 3, 0, 3), Cursor = Cursors.Hand };
             button.FlatAppearance.BorderSize = 0; button.Click += (_, _) => _tabs.SelectedTab = page;
             list.Controls.Add(button); buttons.Add((button, page));
         }
         void Highlight() { foreach (var item in buttons) item.Button.BackColor = item.Page == _tabs.SelectedTab ? Color.FromArgb(45, 99, 170) : side.BackColor; }
         _tabs.SelectedIndexChanged += (_, _) => Highlight(); Highlight();
         scroll.Controls.Add(list); side.Controls.Add(scroll);
-        side.Controls.Add(new Label { Text = "Made for MikroTik\nv0.6.2 • Open source", Dock = DockStyle.Bottom, AutoSize = true, ForeColor = Color.LightSteelBlue, Padding = new Padding(4, 8, 0, 0) });
+        side.Controls.Add(new Label { Text = "Made for MikroTik\nv0.7.0 • Open source", Dock = DockStyle.Bottom, AutoSize = true, ForeColor = Color.LightSteelBlue, Padding = new Padding(4, 8, 0, 0) });
         return side;
     }
 
     private Control BuildSelectionBar()
     {
-        var bar = new FlowLayoutPanel { Dock = DockStyle.Bottom, AutoSize = true, Padding = new Padding(8), BackColor = Color.FromArgb(232, 241, 252) };
-        bar.Controls.Add(_selectionLabel);
-        bar.Controls.Add(Button("Upgrade Selected", RunNow)); bar.Controls.Add(Button("Backup", BackupSelectedRouters));
-        bar.Controls.Add(Button("Check API", CheckApiStatusSelected)); bar.Controls.Add(Button("Site / Tags", SetSiteTags));
-        _routerGrid.SelectionChanged += (_, _) => _selectionLabel.Text = $"{_routerGrid.SelectedRows.Count} device(s) selected";
+        var bar = new ToolStrip { Dock = DockStyle.Bottom, GripStyle = ToolStripGripStyle.Hidden, AutoSize = true, Padding = new Padding(8, 6, 8, 6) };
+        var count = new ToolStripLabel("Select devices to begin"); bar.Items.Add(count); bar.Items.Add(new ToolStripSeparator());
+        foreach (var action in new (string Text, EventHandler Handler)[] { ("Upgrade Selected", RunNow), ("Backup", BackupSelectedRouters), ("Check API", CheckApiStatusSelected), ("Site / Tags", SetSiteTags) })
+            bar.Items.Add(new ToolStripButton(action.Text, null, action.Handler) { Padding = new Padding(8, 4, 8, 4) });
+        _routerGrid.SelectionChanged += (_, _) => { _selectionLabel.Text = count.Text = $"{_routerGrid.SelectedRows.Count} selected"; };
         return bar;
     }
 
     private string ColumnLayoutPath => Path.Combine(_store.RootDirectory, "inventory-columns.json");
-    private sealed record ColumnLayout(string Property, int Width, bool Visible);
+    private sealed record ColumnLayout(string Property, int Width, bool Visible, int Dpi = 96);
     private void RestoreColumns()
     {
         foreach (DataGridViewColumn c in _routerGrid.Columns)
-            c.Visible = c.DataPropertyName is not (nameof(RouterRecord.ApiPort) or nameof(RouterRecord.Username) or nameof(RouterRecord.LastCheckedAt) or nameof(RouterRecord.LastBackupAt) or nameof(RouterRecord.Tags));
+            c.Visible = c.DataPropertyName is not (nameof(RouterRecord.ApiPort) or nameof(RouterRecord.Username) or nameof(RouterRecord.LastCheckedAt) or nameof(RouterRecord.LastBackupAt) or nameof(RouterRecord.Tags) or nameof(RouterRecord.Site) or nameof(RouterRecord.StorageStatus));
         try
         {
             if (!File.Exists(ColumnLayoutPath)) return;
             var saved = JsonSerializer.Deserialize<List<ColumnLayout>>(File.ReadAllText(ColumnLayoutPath)) ?? [];
             foreach (var entry in saved)
                 foreach (DataGridViewColumn c in _routerGrid.Columns)
-                    if (c.DataPropertyName == entry.Property) { c.FillWeight = Math.Clamp(entry.Width, 55, 1200); c.Visible = entry.Visible; }
+                    if (c.DataPropertyName == entry.Property) { c.FillWeight = Math.Clamp(entry.Width * 96f / Math.Max(96, entry.Dpi), 55, 1200); c.Visible = entry.Visible; }
         }
         catch { }
     }
     private void SaveColumnLayout()
     {
-        try { File.WriteAllText(ColumnLayoutPath, JsonSerializer.Serialize(_routerGrid.Columns.Cast<DataGridViewColumn>().Select(c => new ColumnLayout(c.DataPropertyName, c.Width, c.Visible)))); } catch { }
+        try { File.WriteAllText(ColumnLayoutPath, JsonSerializer.Serialize(_routerGrid.Columns.Cast<DataGridViewColumn>().Select(c => new ColumnLayout(c.DataPropertyName, c.Width, c.Visible, DeviceDpi)))); } catch { }
     }
     private void ChooseColumns(object? sender, EventArgs e)
     {

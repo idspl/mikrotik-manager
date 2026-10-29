@@ -5,7 +5,27 @@ internal static class Program
     [STAThread]
     private static void Main(string[] args)
     {
+        if (args.Length == 1 && args[0] == "--service")
+        {
+            System.ServiceProcess.ServiceBase.Run(new SchedulerWindowsService()); return;
+        }
         ApplicationConfiguration.Initialize();
+        if (InstalledMode.ElevateIfNeeded(args)) return;
+        if (args.Length == 1 && args[0] == "--prepare-install")
+        {
+            try { InstalledMode.PrepareDataDirectory(); } catch { Environment.ExitCode = 1; } return;
+        }
+        if (args.Length == 1 && args[0] == "--seed-service-test")
+        {
+            var fixtureStore = new SecureStore();
+            if (fixtureStore.LoadJobs().Count != 0 || fixtureStore.LoadRouters().Count != 0) { Environment.ExitCode = 1; return; }
+            fixtureStore.SaveJobs([new UpgradeJob { Name = "CI empty inventory safety check", ScheduledLocalTime = DateTime.Now.AddMinutes(-1), RouterIds = [] }]); return;
+        }
+        if (args.Length == 1 && args[0] == "--verify-service-test")
+        {
+            var jobs = new SecureStore().LoadJobs();
+            Environment.ExitCode = jobs.Count == 1 && jobs[0].CompletedAt is not null && jobs[0].State.StartsWith("Failed:") ? 0 : 1; return;
+        }
         if (args.Length == 1 && args[0] == "--self-test")
         {
             try { RegressionTests.RunAsync().GetAwaiter().GetResult(); }
@@ -24,7 +44,7 @@ internal static class Program
                 owned = outcome == ScheduledOwnership.Acquired;
                 if (!owned) { Environment.ExitCode = outcome == ScheduledOwnership.CompletedByDesktop ? 0 : 2; return; }
             }
-            else { MessageBox.Show("MikroTik Manager or a scheduled job is already running."); return; }
+            else { MessageBox.Show("MikroTik Manager or background maintenance is running. Wait for the job to finish, then reopen the app. Service logs are in ProgramData\\MikroTik Manager\\Logs."); return; }
         }
         try
         {
@@ -55,9 +75,9 @@ internal static class Program
         finally { instance.ReleaseMutex(); }
     }
 
-    private static async Task RunScheduledJobAsync(Guid jobId)
+    internal static async Task RunScheduledJobAsync(Guid jobId, CancellationToken ct = default, SecureStore? suppliedStore = null)
     {
-        var store = new SecureStore();
+        var store = suppliedStore ?? new SecureStore();
         List<UpgradeJob> jobs = store.LoadJobs();
         UpgradeJob? job = jobs.FirstOrDefault(x => x.Id == jobId);
         if (job is null || job.State != "Scheduled") { Environment.ExitCode = job?.State == "Completed" ? 0 : 2; return; }
@@ -71,10 +91,12 @@ internal static class Program
         var selected = job.RouterIds.Select(id => routers.FirstOrDefault(x => x.Id == id)).Where(x => x is not null).Cast<RouterRecord>().ToList();
         try
         {
+            BackupSchedulePolicy.Validate(job);
+            ct.ThrowIfCancellationRequested();
             if (selected.Count == 0 || selected.Count != job.RouterIds.Count) throw new InvalidOperationException("Scheduled routers are missing or empty.");
             if (job.Kind == ScheduledJobKind.Backup)
             {
-                var backup = await ScheduledBackupRunner.RunAsync(store, store.LoadSettings(), job, selected, null, null, CancellationToken.None);
+                var backup = await ScheduledBackupRunner.RunAsync(store, store.LoadSettings(), job, selected, null, null, ct);
                 job.State = backup.Failed == 0 ? "Completed" : $"Completed with {backup.Failed} backup failures";
                 backupSummary = job.LastRunResult = $"Backup: {backup.Successful} successful, {backup.Failed} failed; {backup.Folder}";
             }
@@ -82,7 +104,7 @@ internal static class Program
             {
             var engine = new UpgradeEngine(store, store.LoadSettings());
             MaintenanceRunResult result = await engine.RunSequentialAsync(selected,
-                new UpgradeRunOptions(job.FailureBehavior, job.RetryCount, job.WindowEnd, MaxConcurrency: job.MaxConcurrency, FailureLimit: job.FailureLimit), CancellationToken.None);
+                new UpgradeRunOptions(job.FailureBehavior, job.RetryCount, job.WindowEnd, MaxConcurrency: job.MaxConcurrency, FailureLimit: job.FailureLimit), ct);
             await new MaintenanceReportService(store).WriteAsync(result);
             job.State = result.Failed == 0 && result.Routers.Count == selected.Count
                 ? "Completed"
@@ -100,7 +122,7 @@ internal static class Program
             BackupSchedulePolicy.Finish(job, success, result, DateTime.Now);
             store.SaveRouters(routers);
             store.SaveJobs(jobs);
-            Environment.ExitCode = success ? 0 : 2;
+            if (suppliedStore is null) Environment.ExitCode = success ? 0 : 2;
         }
     }
 }

@@ -41,7 +41,7 @@ public sealed partial class MainForm : Form
         AppTheme.Set(_store.LoadSettings().Theme);
         _defaultReleaseChannel = _store.LoadSettings().UpdateChannel;
         _routerContextMenu = new ContextMenuStrip(_components);
-        Text = "MikroTik Manager 0.6.2";
+        Text = "MikroTik Manager 0.7.0";
         Font = new Font("Segoe UI", 9F);
         Icon = AppIcon.Current;
         Width = 1440;
@@ -191,8 +191,8 @@ public sealed partial class MainForm : Form
         var updatesMenu = new ToolStripDropDownButton("Help") { Alignment = ToolStripItemAlignment.Right };
         updatesMenu.DropDownItems.Add("Check for Updates", null, async (_, _) => await CheckForUpdatesAsync(true));
         updatesMenu.DropDownItems.Add(new ToolStripSeparator());
-        updatesMenu.DropDownItems.Add("About MikroTik Manager 0.6.2", null, (_, _) =>
-            MessageBox.Show("MikroTik Manager 0.6.2\n\nMade for MikroTik\nIndependent open-source software by Indigo Data Services Pvt Ltd.", Text,
+        updatesMenu.DropDownItems.Add("About MikroTik Manager 0.7.0", null, (_, _) =>
+            MessageBox.Show("MikroTik Manager 0.7.0\n\nMade for MikroTik\nIndependent open-source software by Indigo Data Services Pvt Ltd.", Text,
                 MessageBoxButtons.OK, MessageBoxIcon.Information));
         actions.Items.AddRange([inventoryMenu, selectionMenu, groupMenu, maintenanceMenu, upgradeMenu, updatesMenu]);
 
@@ -218,7 +218,7 @@ public sealed partial class MainForm : Form
         filters.Items.Add(new ToolStripLabel("Group"));
         filters.Items.Add(new ToolStripControlHost(_groupSelector) { AutoSize = false, Width = 150 });
         filters.Items.Add(new ToolStripSeparator());
-        filters.Items.Add(new ToolStripLabel("Select rows with Ctrl or Shift") { ForeColor = Color.DimGray });
+        _routerGrid.AccessibleDescription = "Select devices with Ctrl or Shift. Use Inventory Columns to show additional details.";
 
         header.Controls.Add(actions, 0, 0);
         header.Controls.Add(filters, 0, 1);
@@ -409,6 +409,12 @@ public sealed partial class MainForm : Form
         _themeChoice.Items.AddRange(["Light", "Dark"]);
         _themeChoice.SelectedItem = AppTheme.IsDark ? "Dark" : "Light";
         _themeChoice.SelectedIndexChanged += (_, _) => { if (!_changingTheme) ChangeTheme(_themeChoice.SelectedItem?.ToString() ?? "Dark"); };
+        var serviceStatus = new Label { AutoSize = true, MaximumSize = new Size(420, 0), Text = InstalledMode.Status() };
+        var serviceRow = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Fill };
+        serviceRow.Controls.Add(serviceStatus);
+        serviceRow.Controls.Add(Button("Refresh", (_, _) => serviceStatus.Text = InstalledMode.Status()));
+        serviceRow.Controls.Add(Button("Services…", (_, _) => System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("services.msc") { UseShellExecute = true })));
+        AddRow(panel, "Scheduled jobs", serviceRow);
         AddRow(panel, "Appearance (saved immediately)", _themeChoice);
         AddRow(panel, "Default RouterOS API port", apiPort);
         AddRow(panel, "Encrypted API connection", ssl);
@@ -1045,7 +1051,7 @@ public sealed partial class MainForm : Form
             await TaskSchedulerService.RegisterAsync(job);
             _store.SaveJobs(_jobs.ToList());
             _jobGrid.Refresh();
-            MessageBox.Show("Schedule created. Windows may request administrator approval so the task can run while nobody is logged in.", Text, MessageBoxButtons.OK, MessageBoxIcon.Information);
+            MessageBox.Show(InstalledMode.Enabled ? "Schedule saved. The desktop runs it while open; the Windows service takes over when closed or logged out. Keep this PC powered on." : "Schedule created. Windows may request administrator approval so the task can run while nobody is logged in.", Text, MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
         catch (Exception ex)
         {
@@ -1172,7 +1178,7 @@ public sealed partial class MainForm : Form
                     using var downloadTimeout = new CancellationTokenSource(TimeSpan.FromMinutes(10));
                     var progress = new Progress<string>(message => { if (!IsDisposed && _updateInProgress) _status.Text = message; });
                     string downloaded = await Task.Run(() => SelfUpdater.DownloadAsync(result.Version, downloadTimeout.Token, progress));
-                    if (MessageBox.Show("Checksum verified. Install and restart now?\n\nThe previous EXE will be kept as .previous. No router data will be removed.", Text,
+                    if (MessageBox.Show(InstalledMode.Enabled ? "Checksum verified. Open Setup now? Close the app before continuing Setup. Your inventory and schedules are retained." : "Checksum verified. Install and restart now?\n\nThe previous EXE will be kept as .previous. No router data will be removed.", Text,
                         MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
                     {
                         SaveAll();

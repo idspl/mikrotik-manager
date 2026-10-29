@@ -46,6 +46,10 @@ jobs:
             -p:DebugSymbols=false `
             -o release/win-x64
 
+      - name: Build Windows installer
+        shell: pwsh
+        run: ./installer/Build-Installer.ps1
+
       - name: Create SHA-256 checksum
         shell: pwsh
         run: |
@@ -63,13 +67,15 @@ jobs:
         run: |
           $exe = "release/win-x64/MikroTikManager.exe"
           $checksum = "$exe.sha256.txt"
+          $setup = "release/installer/MikroTikManager-Setup.exe"
+          $setupChecksum = "$setup.sha256.txt"
 
           gh release view $env:TAG *> $null
           if ($LASTEXITCODE -eq 0) {
-            gh release upload $env:TAG $exe $checksum --clobber
+            gh release upload $env:TAG $exe $checksum $setup $setupChecksum --clobber
           }
           else {
-            gh release create $env:TAG $exe $checksum `
+            gh release create $env:TAG $exe $checksum $setup $setupChecksum `
               --title "MikroTik Manager $env:VERSION" `
-              --notes "Self-contained Windows x64 release. Download MikroTikManager.exe and verify it with the accompanying SHA-256 checksum. MikroTik, RouterOS, RouterBOARD and WinBox are trademarks of MikroTikls SIA. This independent Indigo project is not affiliated with, sponsored by or endorsed by MikroTikls SIA."
+              --notes "Windows x64 release. Download MikroTikManager-Setup.exe for installation and the background scheduler service, or MikroTikManager.exe for portable mode and verify it with the accompanying SHA-256 checksum. MikroTik, RouterOS, RouterBOARD and WinBox are trademarks of MikroTikls SIA. This independent Indigo project is not affiliated with, sponsored by or endorsed by MikroTikls SIA."
           }

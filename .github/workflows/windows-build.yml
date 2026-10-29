@@ -32,6 +32,21 @@ jobs:
             if (Test-Path self-test-failure.log) { Get-Content self-test-failure.log }
             throw "Regression tests failed: $($test.ExitCode)"
           }
+      - name: Build Windows installer
+        shell: pwsh
+        run: ./installer/Build-Installer.ps1
+      - name: Test installed service lifecycle
+        timeout-minutes: 6
+        shell: pwsh
+        run: ./installer/Test-Installer.ps1
+      - name: Installer diagnostics
+        if: failure()
+        shell: pwsh
+        run: |
+          Get-Content "$env:TEMP/MikroTikManager-setup.log" -ErrorAction SilentlyContinue
+          Get-Content "$env:ProgramFiles/Indigo/MikroTik Manager/setup-service.log" -ErrorAction SilentlyContinue
+          Get-ChildItem "$env:ProgramFiles/Indigo/MikroTik Manager" -ErrorAction SilentlyContinue | Select-Object Name
+          Get-Service *MikroTik* -ErrorAction SilentlyContinue
       - name: Capture workspace previews
         if: always()
         shell: pwsh
@@ -40,4 +55,6 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: MikroTikManager-win-x64
-          path: release/win-x64/MikroTikManager.exe
+          path: |
+            release/win-x64/MikroTikManager.exe
+            release/installer/*

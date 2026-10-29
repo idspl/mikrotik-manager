@@ -1,3 +1,16 @@
+## v0.7.0 — High-DPI layout and Windows service installer
+
+Download **MikroTikManager-Setup.exe** for the installed edition, or keep using **MikroTikManager.exe** in portable mode. Both are self-contained Windows x64 builds with SHA-256 files. Setup requires administrator access.
+
+- Inventory row heights now follow font size and display DPI, with breathing room and compact action/navigation bars. The splash uses scalable layout and wrapped text. New inventories hide Site and Storage by default; existing column choices are preserved. Use Inventory → Columns to adjust the list.
+- Setup installs **Indigo MikroTik Scheduler** with delayed automatic startup. Existing inventory, settings, credentials, backup history and schedules in `C:\ProgramData\MikroTik Manager` are retained. Only this application's GUID-named Windows tasks are archived and removed after the service starts.
+- The desktop owns scheduling while open; the service takes over when closed or logged out, checking every 10 seconds. A global ownership lock prevents concurrent desktop/task/service execution. Wait for background maintenance to finish before reopening the desktop. Settings shows service status and opens Windows Services.
+- The computer must be on, awake and able to reach the routers. Missed jobs run on the next opportunity subject to the saved maintenance cutoff. Interrupted jobs are held for review, not automatically replayed. Existing backup parallelism/failure isolation and upgrade ordering remain in use.
+- Installed mode requires elevation and restricts shared credential files to SYSTEM and Administrators. Service runs as LocalSystem and uses existing machine-scope DPAPI credentials. Scheduled backup folders must be local fixed drives; make sure SYSTEM has access.
+- Installed self-updates download and verify the Setup asset; portable mode retains EXE replacement. Setup refuses to replace a busy app, stops the service before replacement, then restarts it. Uninstall removes the service and application, retaining ProgramData and downloaded backups.
+
+Validation includes existing Windows regressions, simulated 100/125/150/200% geometry/font checks, and disposable Windows-runner install/service/repair/uninstall checks. Physical multi-monitor DPI switching and live-router upgrades need user acceptance.
+
 ## v0.6.2 — Compare version colors with the published release channel
 
 RouterOS and firmware cells now compare each installed version against the latest published MikroTik release for the device's configured channel (Stable, Long-term or Testing). Devices inheriting settings use the default channel. Green means a matching release; amber means a different release, including an installed version ahead of the selected channel. Missing/failed release checks remain neutral. Refresh the release strip to recheck; tooltips show the target channel and version. The comparison also applies in Device Details and supports beta/RC versions. Bundled RouterBOARD firmware is no longer used as the color target. Maintenance compatibility checks and upgrade commands remain unchanged.

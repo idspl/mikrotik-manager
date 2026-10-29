@@ -6,6 +6,7 @@ public static class TaskSchedulerService
 {
     public static async Task DeleteAsync(Guid jobId)
     {
+        if (InstalledMode.Enabled) return;
         // Only the application's exact GUID task is removed. Missing tasks are already deleted.
         string script = "$ErrorActionPreference='Stop'; try { " +
             "Get-ScheduledTask -ErrorAction Stop | Where-Object { $_.TaskPath -eq '\\MikroTik Manager\\' -and $_.TaskName -eq '" + jobId.ToString("N") +
@@ -26,6 +27,7 @@ public static class TaskSchedulerService
         if (job.ScheduledLocalTime <= DateTime.Now.AddMinutes(1))
             throw new ArgumentException("The schedule must be at least one minute in the future.");
 
+        if (InstalledMode.Enabled) { InstalledMode.RequireRunning(); return; }
         string exe = Environment.ProcessPath ?? throw new InvalidOperationException("Cannot locate the application executable.");
         string taskName = $"MikroTik Manager\\{job.Id:N}";
         string action = $"\"{exe}\" --run-job {job.Id:D}";
