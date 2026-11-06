@@ -15,6 +15,7 @@ jobs:
   validate:
     uses: ./.github/workflows/windows-build.yml
   release:
+    if: github.ref == 'refs/heads/main'
     needs: validate
     runs-on: windows-latest
 
@@ -62,7 +63,7 @@ jobs:
             gh release upload $env:TAG $exe $checksum $setup $setupChecksum --clobber
           }
           else {
-            gh release create $env:TAG $exe $checksum $setup $setupChecksum `
+            gh release create $env:TAG $exe $checksum $setup $setupChecksum --target $env:GITHUB_SHA `
               --title "MikroTik Manager $env:VERSION" `
               --notes "Windows x64 release. Download MikroTikManager-Setup.exe for installation and the background scheduler service, or MikroTikManager.exe for portable mode and verify it with the accompanying SHA-256 checksum. MikroTik, RouterOS, RouterBOARD and WinBox are trademarks of MikroTikls SIA. This independent Indigo project is not affiliated with, sponsored by or endorsed by MikroTikls SIA."
           }
