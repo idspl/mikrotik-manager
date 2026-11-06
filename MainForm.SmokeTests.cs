@@ -36,6 +36,7 @@ public sealed partial class MainForm
             if (caption.Bounds.IntersectsWith(label.Bounds) || caption.Bottom > label.Parent.ClientSize.Height - label.Parent.Padding.Bottom)
                 throw new Exception("Dashboard card overlaps at " + scale);
         }
+        VerifyToolbarNavigation(scale, Capture);
         Capture("dashboard");
         if (_dashboardJobs.Parent is ScrollableControl dashboardScroll)
         {

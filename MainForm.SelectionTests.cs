@@ -42,8 +42,8 @@ public sealed partial class MainForm
             if (_skipFailedContinue.Enabled) throw new Exception("Continue must not overlap an active job.");
             _operationInProgress = false; _lastUpgradeRouterIds = []; UpdateSkipFailedButton();
             if (_skipFailedContinue.Enabled) throw new Exception("Backup results must not enable upgrade continuation.");
-            if (_skipFailedContinue.FlatStyle != FlatStyle.Flat || _skipFailedContinue.MinimumSize.Height < 32
-                || _skipFailedContinue.Text.Contains('&')) throw new Exception("Continue button must use the standard readable style.");
+            if (_skipFailedContinue.OwnerItem is not ToolStripDropDownItem || _skipFailedContinue.ToolTipText.Length == 0)
+                throw new Exception("Continue action must remain reachable in Queue with explanatory tooltip.");
         }
         finally
         {

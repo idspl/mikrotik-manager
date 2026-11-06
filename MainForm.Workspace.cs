@@ -76,24 +76,37 @@ public sealed partial class MainForm
 
     private Control BuildNavigation()
     {
-        var side = new Panel { Name = "Navigation", Dock = DockStyle.Left, Width = 182, BackColor = Color.FromArgb(23, 39, 62), Padding = new Padding(12) };
+        var side = new Panel { Name = "Navigation", Dock = DockStyle.Left, Width = 182, BackColor = Color.FromArgb(23, 39, 62), Padding = new Padding(10) };
+        _navigationPanel = side;
         var scroll = new Panel { Dock = DockStyle.Fill, AutoScroll = true };
         var list = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 1, Padding = Padding.Empty, Margin = Padding.Empty };
         list.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        list.Controls.Add(new Label { Text = "INDIGO\nMikroTik Manager", ForeColor = Color.White, Font = new Font("Segoe UI", 11, FontStyle.Bold), AutoSize = true, Dock = DockStyle.Fill, Margin = new Padding(0, 0, 0, 16), Padding = new Padding(4, 12, 0, 8) });
-        var buttons = new List<(Button Button, TabPage Page)>();
+        _navigationBrand = new Label { Text = "INDIGO\nMikroTik Manager", ForeColor = Color.White, Font = new Font("Segoe UI", 11, FontStyle.Bold), AutoSize = true, Dock = DockStyle.Top, Padding = new Padding(4, 8, 0, 14) };
+        _navigationToggle = new ThemedButton { Text = "‹  Collapse menu", Dock = DockStyle.Top, FlatStyle = FlatStyle.Flat,
+            ForeColor = Color.LightSteelBlue, BackColor = side.BackColor, Height = 30, AccessibleName = "Collapse or expand sidebar (Ctrl+B)" };
+        _navigationToggle.FlatAppearance.BorderSize = 0;
+        _navigationToggle.Click += (_, _) => SetNavigationCollapsed(!_navigationCollapsed);
+        var tips = new ToolTip(_components);
+        int index = 0;
         foreach (TabPage page in _tabs.TabPages)
         {
-            string title = page.Text == "Maintenance Progress" ? "Maintenance" : page.Text;
-            var button = new NavigationButton { Section = page.Text, Text = title, Dock = DockStyle.Fill, AutoSize = true, MinimumSize = new Size(0, 36), FlatStyle = FlatStyle.Flat, TextAlign = ContentAlignment.MiddleLeft,
-                Padding = new Padding(34, 4, 8, 4), ForeColor = Color.White, BackColor = side.BackColor, Margin = new Padding(0, 3, 0, 3), Cursor = Cursors.Hand };
+            string title = PageTitle(page);
+            var button = new NavigationButton { Section = page.Text, Text = title, AccessibleName = title, Dock = DockStyle.Fill,
+                AutoSize = false, Height = 40, FlatStyle = FlatStyle.Flat, TextAlign = ContentAlignment.MiddleLeft,
+                Padding = new Padding(34, 0, 4, 0), ForeColor = Color.White, BackColor = side.BackColor,
+                Margin = new Padding(0, 2, 0, 2), Cursor = Cursors.Hand };
+            button.FontChanged += (_, _) => button.Height = Math.Max((int)(38 * Math.Max(button.DeviceDpi / 96f, button.Font.SizeInPoints / 9f)), button.Font.Height + 16);
             button.FlatAppearance.BorderSize = 0; button.Click += (_, _) => _tabs.SelectedTab = page;
-            list.Controls.Add(button); buttons.Add((button, page));
+            list.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            list.Controls.Add(button); _navigationButtons.Add((button, page));
+            tips.SetToolTip(button, title + " (Ctrl+" + (++index) + ")");
         }
-        void Highlight() { foreach (var item in buttons) item.Button.BackColor = item.Page == _tabs.SelectedTab ? Color.FromArgb(45, 99, 170) : side.BackColor; }
+        void Highlight() { foreach (var item in _navigationButtons) item.Button.BackColor = item.Page == _tabs.SelectedTab ? Color.FromArgb(45, 99, 170) : side.BackColor; }
         _tabs.SelectedIndexChanged += (_, _) => Highlight(); Highlight();
-        scroll.Controls.Add(list); side.Controls.Add(scroll);
-        side.Controls.Add(new Label { Text = "Made for MikroTik\nv0.7.2 • Open source", Dock = DockStyle.Bottom, AutoSize = true, ForeColor = Color.LightSteelBlue, Padding = new Padding(4, 8, 0, 0) });
+        scroll.Controls.Add(list); side.Controls.Add(scroll); side.Controls.Add(_navigationBrand); side.Controls.Add(_navigationToggle);
+        _navigationFooter = new Label { Text = "Made for MikroTik\nv0.7.3 • Open source", Dock = DockStyle.Bottom, AutoSize = true, ForeColor = Color.LightSteelBlue, Padding = new Padding(4, 8, 0, 0) };
+        side.Controls.Add(_navigationFooter);
+        SetNavigationCollapsed(_store.LoadSettings().NavigationCollapsed, false);
         return side;
     }
 

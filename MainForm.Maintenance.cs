@@ -118,6 +118,7 @@ public sealed partial class MainForm
             HistoryStage? stage = run.Stages.LastOrDefault(x => x.RouterId == row.RouterId);
             row.Result = run.CompletedIds.Contains(row.RouterId) ? "Completed" : stage is null ? "Pending"
                 : stage.Result is "Failed" or "Cancelled" ? stage.Result : "Interrupted";
+            row.Progress = row.Result == "Completed" ? 100 : 0;
             row.Stage = stage?.Stage ?? "Queued";
             row.Message = stage?.Message ?? "Not started";
             row.Attempt = stage?.Attempt ?? 0;

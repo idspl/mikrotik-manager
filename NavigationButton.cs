@@ -3,14 +3,16 @@ namespace MikroTikManager;
 
 internal sealed class NavigationButton : Button
 {
+    public bool Compact { get; set; }
     public string Section { get; init; } = "";
     protected override void OnPaint(PaintEventArgs e)
     {
         base.OnPaint(e);
-        float size = 18 * DeviceDpi / 96f;
+        float factor = Math.Max(DeviceDpi / 96f, Font.SizeInPoints / 9f);
+        float size = 18 * factor;
         var state = e.Graphics.Save();
         e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
-        e.Graphics.TranslateTransform(10 * DeviceDpi / 96f, (Height - size) / 2);
+        e.Graphics.TranslateTransform(Compact ? (Width - size) / 2 : 10 * factor, (Height - size) / 2);
         e.Graphics.ScaleTransform(size / 18, size / 18);
         using var pen = new Pen(ForeColor, 1.5f) { StartCap = LineCap.Round, EndCap = LineCap.Round, LineJoin = LineJoin.Round };
         switch (Section)

@@ -30,7 +30,7 @@ public sealed partial class MainForm : Form
     private bool _suspendRouterSaves;
     private bool _contextMenuRowValid;
     private List<Guid> _lastUpgradeRouterIds = [];
-    private readonly Button _skipFailedContinue = Button("Skip Failed and Continue", null);
+    private readonly ToolStripMenuItem _skipFailedContinue = new("Skip Failed and Continue");
 
     public MainForm(SecureStore? store = null, bool smokeTest = false)
     {
@@ -41,7 +41,7 @@ public sealed partial class MainForm : Form
         AppTheme.Set(_store.LoadSettings().Theme);
         _defaultReleaseChannel = _store.LoadSettings().UpdateChannel;
         _routerContextMenu = new ContextMenuStrip(_components);
-        Text = "MikroTik Manager 0.7.2";
+        Text = "MikroTik Manager 0.7.3";
         Font = new Font("Segoe UI", 9F);
         Icon = AppIcon.Current;
         Width = 1440;
@@ -121,24 +121,18 @@ public sealed partial class MainForm : Form
         var header = new TableLayoutPanel
         {
             Dock = DockStyle.Top,
-            Height = 104,
+            AutoSize = true,
             RowCount = 3,
             ColumnCount = 1,
             BackColor = Color.FromArgb(245, 247, 250),
             Padding = new Padding(4, 3, 4, 3)
         };
-        header.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
-        header.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
-        header.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
+        header.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        header.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        header.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
-        var actions = new ToolStrip
-        {
-            Dock = DockStyle.Fill,
-            GripStyle = ToolStripGripStyle.Hidden,
-            RenderMode = ToolStripRenderMode.System,
-            BackColor = Color.FromArgb(245, 247, 250),
-            Padding = new Padding(3, 1, 3, 1)
-        };
+        var actions = PageToolbar("Devices");
+        actions.Dock = DockStyle.Fill;
         var inventoryMenu = new ToolStripDropDownButton("Inventory");
         inventoryMenu.DropDownItems.Add("Import WinBox CDB / WBX...", null, ImportCdb);
         inventoryMenu.DropDownItems.Add("Add Router Manually...", null, AddRouterManually);
@@ -190,15 +184,18 @@ public sealed partial class MainForm : Form
 
         var updatesMenu = new ToolStripDropDownButton("Help") { Alignment = ToolStripItemAlignment.Right };
         updatesMenu.DropDownItems.Add("Check for Updates", null, async (_, _) => await CheckForUpdatesAsync(true));
+        updatesMenu.DropDownItems.Add("Navigation Shortcuts", null, ShowNavigationHelp);
         updatesMenu.DropDownItems.Add(new ToolStripSeparator());
-        updatesMenu.DropDownItems.Add("About MikroTik Manager 0.7.2", null, (_, _) =>
-            MessageBox.Show("MikroTik Manager 0.7.2\n\nMade for MikroTik\nIndependent open-source software by Indigo Data Services Pvt Ltd.", Text,
+        updatesMenu.DropDownItems.Add("About MikroTik Manager 0.7.3", null, (_, _) =>
+            MessageBox.Show("MikroTik Manager 0.7.3\n\nMade for MikroTik\nIndependent open-source software by Indigo Data Services Pvt Ltd.", Text,
                 MessageBoxButtons.OK, MessageBoxIcon.Information));
         actions.Items.AddRange([inventoryMenu, selectionMenu, groupMenu, maintenanceMenu, upgradeMenu, updatesMenu]);
 
         var filters = new ToolStrip
         {
             Dock = DockStyle.Fill,
+            AutoSize = true,
+            Font = Font,
             GripStyle = ToolStripGripStyle.Hidden,
             RenderMode = ToolStripRenderMode.System,
             BackColor = Color.White,
@@ -299,18 +296,17 @@ public sealed partial class MainForm : Form
     private TabPage BuildMaintenancePage()
     {
         var page = new TabPage("Maintenance Progress");
-        var bar = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, Padding = new Padding(8), WrapContents = true };
-        bar.Controls.Add(Button("Retry Failed", RetryFailed));
         _skipFailedContinue.Enabled = false;
-        _skipFailedContinue.AccessibleDescription = "Continue only unstarted devices after an upgrade failure. Backup jobs continue automatically.";
-        new ToolTip(_components).SetToolTip(_skipFailedContinue, _skipFailedContinue.AccessibleDescription);
+        _skipFailedContinue.ToolTipText = "Continue unstarted devices after an upgrade failure. Backups continue automatically.";
         _skipFailedContinue.Click += SkipFailedAndContinue;
-        bar.Controls.Add(_skipFailedContinue);
-        bar.Controls.Add(Button("Pause New Starts", PauseAfterRouter));
-        bar.Controls.Add(Button("History", ShowHistory));
-        bar.Controls.Add(Button("Open Reports Folder", OpenReportsFolder));
-        bar.Controls.Add(Button("Cancel Current Job", (_, _) => _running?.Cancel()));
-        bar.Controls.Add(new Label { Text = "Live progress remains interactive while maintenance is running.", AutoSize = true, ForeColor = Color.DimGray, Padding = new Padding(8, 7, 0, 0) });
+        var queue = ToolbarMenu("Queue",
+            MenuAction("Retry Failed", RetryFailed), _skipFailedContinue,
+            MenuAction("Resume Incomplete Queue", ResumeIncomplete), new ToolStripSeparator(),
+            MenuAction("Pause New Starts", PauseAfterRouter));
+        var history = ToolbarMenu("History", MenuAction("View Maintenance History", ShowHistory), MenuAction("Open Reports Folder", OpenReportsFolder));
+        var bar = PageToolbar("Maintenance", queue, history,
+            ToolbarAction("Pause New Starts", PauseAfterRouter),
+            ToolbarAction("Cancel Job", (_, _) => _running?.Cancel()));
         _progressGrid.Dock = DockStyle.Fill;
         _progressGrid.ReadOnly = true;
         _progressGrid.AllowUserToAddRows = false;
@@ -334,15 +330,11 @@ public sealed partial class MainForm : Form
     private TabPage BuildSchedulesPage()
     {
         var page = new TabPage("Schedules");
-        var bar = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, Padding = new Padding(8), WrapContents = true };
         _scheduleTime.Value = DateTime.Now.AddHours(1);
-        bar.Controls.Add(Button("Create Upgrade Schedule…", ShowUpgradeScheduleDialog));
-        bar.Controls.Add(Button("Create Backup Schedule…", CreateBackupSchedule));
-        bar.Controls.Add(Button("Run Now", RunJobNow));
-        bar.Controls.Add(Button("Edit Backup", EditBackupSchedule));
-        bar.Controls.Add(Button("Disable Backup", DisableBackupSchedule));
-        bar.Controls.Add(Button("Activate Imported", ActivateImportedSchedule));
-        bar.Controls.Add(Button("Delete…", DeleteSchedule));
+        var create = ToolbarMenu("Create", MenuAction("Upgrade Schedule…", ShowUpgradeScheduleDialog), MenuAction("Backup Schedule…", CreateBackupSchedule));
+        var manage = ToolbarMenu("Manage", MenuAction("Edit Backup Schedule", EditBackupSchedule), MenuAction("Disable Backup Schedule", DisableBackupSchedule),
+            MenuAction("Activate Imported Schedule", ActivateImportedSchedule), new ToolStripSeparator(), MenuAction("Delete Schedule…", DeleteSchedule));
+        var bar = PageToolbar("Schedules", create, ToolbarAction("Run Now", RunJobNow), manage);
         _jobGrid.Dock = DockStyle.Fill;
         _jobGrid.ReadOnly = true;
         _jobGrid.AllowUserToAddRows = false;
@@ -376,6 +368,7 @@ public sealed partial class MainForm : Form
         _log.ReadOnly = true;
         _log.Font = new Font("Consolas", 9);
         page.Controls.Add(_log);
+        page.Controls.Add(PageToolbar("Live Log", ToolbarAction("Select All", (_, _) => _log.SelectAll()), ToolbarAction("Copy Selected", (_, _) => _log.Copy()), ToolbarAction("Go to Latest", (_, _) => { _log.SelectionStart = _log.TextLength; _log.ScrollToCaret(); })));
         return page;
     }
 
@@ -430,7 +423,7 @@ public sealed partial class MainForm : Form
         AddRow(panel, "Router status refresh", refreshRouters);
         AddRow(panel, "Health interval (minutes; 0 = off)", healthPoll);
         AddRow(panel, "Critical interface recovery (seconds)", interfaceWait);
-        page.AutoScroll = true;
+        page.AutoScroll = false;
         AddRow(panel, "RouterOS update channel", channel);
         AddRow(panel, "Trademark notice", new Label
         {
@@ -438,11 +431,12 @@ public sealed partial class MainForm : Form
             AutoSize = true,
             MaximumSize = new Size(420, 0)
         });
-        var save = Button("Save Settings", (_, _) =>
+        var save = ToolbarAction("Save Settings", (_, _) =>
         {
             var value = new AppSettings
             {
                 Theme = _themeChoice.SelectedItem?.ToString() ?? "Dark",
+                NavigationCollapsed = _navigationCollapsed,
                 DefaultApiPort = (int)apiPort.Value,
                 UseApiSsl = ssl.Checked,
                 AllowInvalidTlsCertificate = invalid.Checked,
@@ -468,8 +462,10 @@ public sealed partial class MainForm : Form
             SaveRouters();
             MessageBox.Show("Settings saved.", Text, MessageBoxButtons.OK, MessageBoxIcon.Information);
         });
-        AddRow(panel, "", save);
-        page.Controls.Add(panel);
+        var body = new Panel { Dock = DockStyle.Fill, AutoScroll = true };
+        body.Controls.Add(panel);
+        page.Controls.Add(body);
+        page.Controls.Add(PageToolbar("Settings", save, ToolbarAction("Navigation Shortcuts", ShowNavigationHelp)));
         return page;
     }
 
