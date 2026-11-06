@@ -1,6 +1,8 @@
-## v0.7.4 — Keep menus unobstructed
+## v0.7.4 — Menu tooltips and reliable release validation
 
 - Disable toolbar and menu-item tooltip popups across all pages, nested menus and context menus in both themes. Menu titles no longer float over the next option when a dropdown is open. Icon-only sidebar tooltips remain available.
+- UI regression checks now run inside a real WinForms message loop, keeping asynchronous Backups refreshes on the UI thread across dialog/page tests. Cross-thread checks remain enabled; the original six-minute limit is retained.
+- Publishing depends on the Windows regression and installer/service checks. Releases use the exact executable and installer artifacts produced by that successful validation job.
 
 ## v0.7.3 — Consistent menus and easier navigation
 

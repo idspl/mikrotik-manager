@@ -69,10 +69,35 @@ internal static class RegressionTests
         var diff = ConfigDiff.Compare("# 2026-10-01 10:00:00 by RouterOS 7.24\n/interface\nadd name=a", "# 2026-10-03 11:00:00 by RouterOS 7.24\n/interface\nadd name=b");
         Check(diff.Count(x => x.Kind == "+") == 1 && diff.Count(x => x.Kind == "−") == 1, "Diff ignores only export timestamps and retains configuration changes");
         Check(!ConfigDiff.Display("password=secret", false).Contains("secret") && ConfigDiff.Display("password=secret", true).Contains("secret"), "Compare masks content unless explicitly revealed");
-        // Construct every tab on the STA entry thread without showing the form or contacting routers.
-        // Run form construction on its own STA thread after async dispatcher tests.
+        // Use a real WinForms message loop for async continuations across forms/dialogs.
+        // DoEvents alone does not keep WindowsFormsSynchronizationContext installed.
         Exception? uiFailure = null;
-        var uiThread = new Thread(() => { try { Application.SetUnhandledExceptionMode(UnhandledExceptionMode.ThrowException); Control.CheckForIllegalCrossThreadCalls = true; foreach (float scale in new[] { 1F, 1.25F, 1.5F, 2F }) { using var form = new MainForm(new SecureStore(Path.Combine(directory, "ui-" + scale)), smokeTest: true); form.RenderSmokeViews(scale); Check(form.Text.Contains("0.7.4"), "Dashboard and menus construct on Windows"); } } catch (Exception ex) { uiFailure = ex; } });
+        var uiThread = new Thread(() =>
+        {
+            Application.SetUnhandledExceptionMode(UnhandledExceptionMode.ThrowException);
+            Control.CheckForIllegalCrossThreadCalls = true;
+            using var context = new ApplicationContext();
+            EventHandler? runChecks = null;
+            runChecks = (_, _) =>
+            {
+                Application.Idle -= runChecks;
+                try
+                {
+                    foreach (float scale in new[] { 1F, 1.25F, 1.5F, 2F })
+                    {
+                        using var form = new MainForm(new SecureStore(Path.Combine(directory, "ui-" + scale)), smokeTest: true);
+                        form.RenderSmokeViews(scale);
+                        Check(form.Text.Contains("0.7.4"), "Dashboard and menus construct on Windows");
+                    }
+                }
+                catch (Exception ex) { uiFailure = ex; }
+                finally { context.ExitThread(); }
+            };
+            Application.Idle += runChecks;
+            try { Application.Run(context); }
+            catch (Exception ex) { uiFailure = ex; }
+            finally { Application.Idle -= runChecks; }
+        });
         uiThread.IsBackground = true; uiThread.SetApartmentState(ApartmentState.STA); uiThread.Start();
         Check(uiThread.Join(TimeSpan.FromMinutes(6)), "UI layout checks timed out; see ui-layout-check.log");
         Check(uiFailure is null, "Windows workspace construction: " + uiFailure);
