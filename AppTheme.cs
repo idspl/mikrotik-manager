@@ -140,6 +140,8 @@ internal static class AppTheme
 
     private static void ApplyStrip(ToolStrip strip)
     {
+        // Menu-title tooltips can linger over an open submenu on high-DPI displays.
+        strip.ShowItemToolTips = false;
         strip.Renderer = new ThemeRenderer();
         strip.BackColor = Surface; strip.ForeColor = Text;
         foreach (ToolStripItem item in strip.Items)

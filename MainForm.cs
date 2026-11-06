@@ -9,6 +9,7 @@ public sealed partial class MainForm : Form
     private readonly TabControl _tabs = new() { Dock = DockStyle.Fill, Appearance = TabAppearance.FlatButtons, ItemSize = new Size(0, 1), SizeMode = TabSizeMode.Fixed };
     private TabPage _maintenancePage = null!;
     private readonly SecureStore _store;
+    private readonly bool _smokeTest;
     private readonly SortableBindingList<RouterRecord> _routers;
     private readonly BindingList<UpgradeJob> _jobs;
     private readonly DataGridView _routerGrid = new SmoothGrid();
@@ -34,6 +35,7 @@ public sealed partial class MainForm : Form
 
     public MainForm(SecureStore? store = null, bool smokeTest = false)
     {
+        _smokeTest = smokeTest;
         SuspendLayout();
         AutoScaleDimensions = new SizeF(96F, 96F);
         AutoScaleMode = AutoScaleMode.Dpi;
@@ -41,7 +43,7 @@ public sealed partial class MainForm : Form
         AppTheme.Set(_store.LoadSettings().Theme);
         _defaultReleaseChannel = _store.LoadSettings().UpdateChannel;
         _routerContextMenu = new ContextMenuStrip(_components);
-        Text = "MikroTik Manager 0.7.3";
+        Text = "MikroTik Manager 0.7.4";
         Font = new Font("Segoe UI", 9F);
         Icon = AppIcon.Current;
         Width = 1440;
@@ -186,8 +188,8 @@ public sealed partial class MainForm : Form
         updatesMenu.DropDownItems.Add("Check for Updates", null, async (_, _) => await CheckForUpdatesAsync(true));
         updatesMenu.DropDownItems.Add("Navigation Shortcuts", null, ShowNavigationHelp);
         updatesMenu.DropDownItems.Add(new ToolStripSeparator());
-        updatesMenu.DropDownItems.Add("About MikroTik Manager 0.7.3", null, (_, _) =>
-            MessageBox.Show("MikroTik Manager 0.7.3\n\nMade for MikroTik\nIndependent open-source software by Indigo Data Services Pvt Ltd.", Text,
+        updatesMenu.DropDownItems.Add("About MikroTik Manager 0.7.4", null, (_, _) =>
+            MessageBox.Show("MikroTik Manager 0.7.4\n\nMade for MikroTik\nIndependent open-source software by Indigo Data Services Pvt Ltd.", Text,
                 MessageBoxButtons.OK, MessageBoxIcon.Information));
         actions.Items.AddRange([inventoryMenu, selectionMenu, groupMenu, maintenanceMenu, upgradeMenu, updatesMenu]);
 
