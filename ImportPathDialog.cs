@@ -10,7 +10,7 @@ public sealed class ImportPathDialog : DpiDialog
         Icon = AppIcon.Current;
         Text = "Import WinBox Address File";
         Width = 620;
-        Height = 225;
+        Height = 280;
         MinimumSize = new Size(520, 225);
         StartPosition = FormStartPosition.CenterParent;
         FormBorderStyle = FormBorderStyle.FixedDialog;
@@ -22,9 +22,9 @@ public sealed class ImportPathDialog : DpiDialog
         {
             Text = "Paste the full path of a .cdb or .wbx file, or drag and drop the file into this window.",
             Dock = DockStyle.Top,
-            Height = 48,
+            AutoSize = true,
             Padding = new Padding(0, 6, 0, 8),
-            AutoEllipsis = true
+            AutoEllipsis = false
         };
         var paste = new Button { Text = "Paste from Clipboard", AutoSize = true };
         paste.Click += (_, _) => PasteClipboard();
@@ -34,18 +34,19 @@ public sealed class ImportPathDialog : DpiDialog
         var buttons = new FlowLayoutPanel
         {
             Dock = DockStyle.Bottom,
-            Height = 48,
+            AutoSize = true,
             FlowDirection = FlowDirection.RightToLeft,
             Padding = new Padding(0, 8, 0, 0)
         };
         buttons.Controls.Add(cancel);
         buttons.Controls.Add(import);
         buttons.Controls.Add(paste);
-        var panel = new Panel { Dock = DockStyle.Fill, Padding = new Padding(18) };
-        panel.Controls.Add(_path);
-        panel.Controls.Add(instructions);
-        panel.Controls.Add(buttons);
-        Controls.Add(panel);
+        var panel = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, Padding = new Padding(18), ColumnCount = 1 };
+        panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        panel.RowStyles.Add(new RowStyle(SizeType.AutoSize)); panel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        panel.Controls.Add(instructions, 0, 0); panel.Controls.Add(_path, 0, 1);
+        panel.SizeChanged += (_, _) => instructions.MaximumSize = new Size(Math.Max(100, panel.ClientSize.Width - panel.Padding.Horizontal - instructions.Margin.Horizontal), 0);
+        SetScrollableContent(panel, buttons);
         AcceptButton = import;
         CancelButton = cancel;
 

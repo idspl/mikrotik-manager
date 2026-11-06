@@ -5,16 +5,13 @@ public sealed partial class MainForm
     private readonly SmoothGrid _backupGrid = new();
     private readonly Label _backupCoverage = new() { Dock = DockStyle.Top, AutoSize = false, Padding = new Padding(15), Text = "Refresh coverage to check local backup files and schedules." };
     private bool _readingCoverage;
-    private readonly Label _backupSelection = new() { AutoSize = true, Padding = new Padding(8, 8, 0, 0), Text = "0 selected • Ctrl-click or Shift-click rows" };
+    private readonly ToolStripLabel _backupSelection = new("0 selected") { Alignment = ToolStripItemAlignment.Right };
     private sealed record BackupCoverageRow(Guid Id, string Device, string Site, string Coverage, DateTime? LastBackup, DateTime? LastAttempt, string Error, string Change, DateTime? ComparedAt);
 
     private TabPage BuildBackupsPage()
     {
         var page = new TabPage("Backups");
-        var bar = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, Padding = new Padding(10) };
-        var menu = new ToolStrip { Dock = DockStyle.None, GripStyle = ToolStripGripStyle.Hidden, AutoSize = true };
-        menu.Items.Add("Backup Selected Devices", null, async (_, _) => await BackupRoutersAsync(SelectedBackupRouters()));
-        var actions = new ToolStripDropDownButton("Backup Actions");
+        var actions = new ToolStripDropDownButton("Actions");
         actions.DropDownItems.Add("Retry Failed Backups", null, async (_, _) => {
             var selection = SelectedBackupRouters();
             var failed = (selection.Count == 0 ? _routers.ToList() : selection).Where(r => r.LastBackupError.Length > 0 && r.LastBackupError != "Cancelled").ToList();
@@ -42,15 +39,11 @@ public sealed partial class MainForm
             _backupGrid.ClearSelection();
             foreach (DataGridViewRow row in _backupGrid.Rows) if (row.DataBoundItem is BackupCoverageRow item && item.Change == "Changed") row.Selected = true;
         });
-        menu.Items.Add(actions); menu.Items.Add(selectionMenu);
-        menu.Items.Add("Refresh Coverage", null, async (_, _) => await RefreshBackupCoverageAsync());
-        menu.Items.Add("Schedules", null, (_, _) => _tabs.SelectedTab = _schedulesPage);
-        bar.Controls.Add(menu);
-        page.SizeChanged += (_, _) => menu.MaximumSize = new Size(Math.Max(100, page.ClientSize.Width - bar.Padding.Horizontal), 0);
+        var bar = PageToolbar("Backups", ToolbarAction("Backup Selected", async (_, _) => await BackupRoutersAsync(SelectedBackupRouters())),
+            selectionMenu, actions, ToolbarAction("Refresh", async (_, _) => await RefreshBackupCoverageAsync()), _backupSelection);
         _backupGrid.Dock = DockStyle.Fill; _backupGrid.ReadOnly = true; _backupGrid.AllowUserToAddRows = false;
-        bar.Controls.Add(_backupSelection);
         _backupGrid.SelectionMode = DataGridViewSelectionMode.FullRowSelect; _backupGrid.MultiSelect = true;
-        _backupGrid.SelectionChanged += (_, _) => _backupSelection.Text = $"{_backupGrid.SelectedRows.Count} selected • Ctrl-click or Shift-click rows";
+        _backupGrid.SelectionChanged += (_, _) => _backupSelection.Text = $"{_backupGrid.SelectedRows.Count} selected";
         _backupGrid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill; StyleGrid(_backupGrid);
         page.Controls.Add(_backupGrid); page.Controls.Add(_backupCoverage); page.Controls.Add(bar);
         void SizeSummary()

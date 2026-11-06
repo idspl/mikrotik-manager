@@ -67,8 +67,7 @@ public sealed class ManualRouterDialog : DpiDialog
         var buttons = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.RightToLeft, Dock = DockStyle.Fill };
         buttons.Controls.Add(cancel);
         buttons.Controls.Add(add);
-        table.Controls.Add(buttons, 1, 10);
-        Controls.Add(table);
+        SetScrollableContent(table, buttons);
         AcceptButton = add;
         CancelButton = cancel;
     }

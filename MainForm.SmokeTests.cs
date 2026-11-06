@@ -36,6 +36,7 @@ public sealed partial class MainForm
             if (caption.Bounds.IntersectsWith(label.Bounds) || caption.Bottom > label.Parent.ClientSize.Height - label.Parent.Padding.Bottom)
                 throw new Exception("Dashboard card overlaps at " + scale);
         }
+        VerifyToolbarNavigation(scale, Capture);
         Capture("dashboard");
         if (_dashboardJobs.Parent is ScrollableControl dashboardScroll)
         {
@@ -58,6 +59,27 @@ public sealed partial class MainForm
         if (_routerGrid.Rows.Cast<DataGridViewRow>().Any(r => r.Height < _routerGrid.Font.Height + 8))
             throw new Exception("Inventory row text lacks vertical padding at " + scale);
         Capture("devices");
+        foreach (DpiDialog compact in new DpiDialog[] { new BackupFolderDialog(), new ImportPathDialog(), new ManualRouterDialog(8728) })
+        using (compact)
+        {
+            File.AppendAllText("ui-layout-check.log", "Compact dialog " + compact.GetType().Name + "\n");
+            compact.Show(this); Application.DoEvents(); ApplyLayoutTestScale(compact, scale); Application.DoEvents();
+            if (!Screen.FromControl(compact).WorkingArea.Contains(compact.Bounds))
+                throw new Exception("Dialog exceeds monitor working area: " + compact.GetType().Name + " at " + scale);
+            foreach (Button action in new[] { (Button)compact.AcceptButton!, (Button)compact.CancelButton! })
+            {
+                var bounds = compact.RectangleToClient(action.RectangleToScreen(action.ClientRectangle));
+                if (!action.Visible || bounds.Bottom > compact.ClientSize.Height || bounds.Top < 0 || bounds.Right > compact.ClientSize.Width)
+                    throw new Exception("Dialog action clipped: " + compact.GetType().Name + " at " + scale);
+            }
+            if (compact is BackupFolderDialog)
+            {
+                using var bitmap = new Bitmap(compact.Width, compact.Height); compact.DrawToBitmap(bitmap, new Rectangle(Point.Empty, bitmap.Size));
+                using var stream = new MemoryStream(); bitmap.Save(stream, System.Drawing.Imaging.ImageFormat.Png);
+                File.WriteAllText($"ui-{(int)(scale * 100)}-backup-dialog.base64", Convert.ToBase64String(stream.ToArray()));
+            }
+            compact.Close();
+        }
         using (var splash = new SplashForm(preview: true))
         {
             splash.Show(); ApplyLayoutTestScale(splash, scale); Application.DoEvents();

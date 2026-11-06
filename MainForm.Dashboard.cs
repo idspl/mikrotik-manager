@@ -27,12 +27,11 @@ public sealed partial class MainForm
             cards.Controls.Add(card); _dashboardCounts[title] = count;
         }
         layout.Controls.Add(cards);
-        var actions = new FlowLayoutPanel { AutoSize = true, Margin = new Padding(0, 2, 0, 14) };
-        actions.Controls.Add(Button("Open Inventory", (_, _) => _tabs.SelectedTab = _routerPage));
-        actions.Controls.Add(Button("Refresh All Router Versions", async (_, _) => { if (!_operationInProgress && !_updateInProgress) await FetchVersionsAsync(_routers.ToList()); RefreshDashboard(); }));
-        actions.Controls.Add(Button("Manage Schedules", (_, _) => _tabs.SelectedTab = _schedulesPage));
-        actions.Controls.Add(Button("Device Health", (_, _) => { _tabs.SelectedTab = _healthPage; RefreshHealthView(); }));
-        layout.Controls.Add(actions);
+        var actions = PageToolbar("Dashboard", ToolbarAction("Refresh Versions", async (_, _) => {
+            if (!_operationInProgress && !_updateInProgress) await FetchVersionsAsync(_routers.ToList()); RefreshDashboard();
+        }), ToolbarMenu("Go to", MenuAction("Devices", (_, _) => _tabs.SelectedTab = _routerPage),
+            MenuAction("Schedules", (_, _) => _tabs.SelectedTab = _schedulesPage),
+            MenuAction("Health", (_, _) => { _tabs.SelectedTab = _healthPage; RefreshHealthView(); })));
         layout.Controls.Add(new Label { Text = "Schedules — double-click to manage", AutoSize = true, Font = new Font("Segoe UI", 11, FontStyle.Bold) });
         ConfigureDashboardGrid(_dashboardJobs, ["Job", "Job type / repeat", "Next / planned run", "State", "Last result"]);
         _dashboardJobs.DoubleClick += (_, _) => _tabs.SelectedTab = _schedulesPage;
@@ -43,12 +42,12 @@ public sealed partial class MainForm
         var notice = new Label { Text = "Made for MikroTik • Independent software by Indigo Data Services. MikroTik trademarks belong to MikroTikls SIA.", AutoSize = true, ForeColor = Color.DimGray, Margin = new Padding(3, 16, 3, 16) };
         layout.Controls.Add(notice);
         page.Controls.Add(layout);
+        page.Controls.Add(actions);
         page.Resize += (_, _) => {
             int width = Math.Max(240, layout.ClientSize.Width - layout.Padding.Horizontal - SystemInformation.VerticalScrollBarWidth - 12);
             _dashboardNote.MaximumSize = new Size(width - 16, 0);
             notice.MaximumSize = new Size(width - 16, 0);
             cards.MaximumSize = new Size(width, 0); cards.Width = width;
-            actions.MaximumSize = new Size(width, 0); actions.Width = width;
             _dashboardJobs.Width = width; _dashboardGroups.Width = width;
         };
         return page;

@@ -1,3 +1,12 @@
+## v0.7.3 — Consistent menus and easier navigation
+
+- Every page now has the same compact title/action toolbar with an overflow menu when width is limited. Maintenance uses Queue and History menus; Schedules uses Create and Manage. Backup and Health actions use the same toolbar sizing. The dashboard's oversized action buttons are replaced by a compact toolbar.
+- Collapse the sidebar to icons using its top button or **Ctrl+B**. The preference is saved; icons retain labels in tooltips and accessible names. Sidebar rows have a consistent compact height.
+- **Ctrl+1–8** opens sidebar pages in order. **Ctrl+Tab / Ctrl+Shift+Tab** moves between pages. **Ctrl+F** opens Devices and focuses search. Navigation help is available from Settings and Devices → Help.
+- Settings keeps Save Settings in the fixed top toolbar while its form scrolls. Live Log adds Select All, Copy Selected and Go to Latest.
+- Backup-folder, import and manual-router dialogs keep action buttons in a fixed footer, wrap instructions and scroll long content. Initial sizing is clamped to the monitor work area.
+- Restored completed maintenance rows now show 100% instead of 0%. Selection, active-job controls and upgrade/backup behavior are retained.
+
 ## v0.7.2 — Diagnose and recover bad HTTP update responses
 
 - On `bad HTTP response` during update checking or package download, the app probes `upgrade.mikrotik.com` through the router API (`/ping address=<hostname> count=1`). The hostname is resolved by the router, not the Windows computer. A returned IP is resolution evidence even when ICMP times out; no IP or a permission/connection failure is reported as unverified.

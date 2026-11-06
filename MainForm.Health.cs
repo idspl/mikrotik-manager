@@ -13,17 +13,16 @@ public sealed partial class MainForm
     private TabPage BuildHealthPage()
     {
         var page = new TabPage("Health"); _healthPage = page;
-        var actions = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, Padding = new Padding(10) };
-        actions.Controls.Add(Button("Refresh All Health", async (_, _) => await RefreshHealthAsync(_routers.ToList())));
-        actions.Controls.Add(Button("Refresh Selected", async (_, _) => {
-            var ids = _healthGrid.SelectedRows.Cast<DataGridViewRow>().Select(r => r.DataBoundItem).OfType<HealthRow>().Select(r => r.Id).ToHashSet();
-            await RefreshHealthAsync(_routers.Where(r => ids.Contains(r.Id)).ToList());
-        }));
-        actions.Controls.Add(Button("Device / Interfaces", (_, _) => {
+        var refresh = ToolbarMenu("Refresh", MenuAction("All Devices", async (_, _) => await RefreshHealthAsync(_routers.ToList())),
+            MenuAction("Selected Devices", async (_, _) => {
+                var ids = _healthGrid.SelectedRows.Cast<DataGridViewRow>().Select(r => r.DataBoundItem).OfType<HealthRow>().Select(r => r.Id).ToHashSet();
+                await RefreshHealthAsync(_routers.Where(r => ids.Contains(r.Id)).ToList());
+            }));
+        var selection = ToolbarMenu("Selection", MenuAction("Select All", (_, _) => _healthGrid.SelectAll()), MenuAction("Clear Selection", (_, _) => _healthGrid.ClearSelection()));
+        var actions = PageToolbar("Health", refresh, selection, ToolbarAction("Device Details", (_, _) => {
             if (_healthGrid.CurrentRow?.DataBoundItem is HealthRow row && _routers.FirstOrDefault(r => r.Id == row.Id) is RouterRecord router) ShowDeviceDetails(router);
-        }));
-        actions.Controls.Add(Button("Cancel Health Refresh", (_, _) => { if (_healthRefreshing) _running?.Cancel(); }));
-        actions.Controls.Add(Button("Monitoring Settings", (_, _) => _tabs.SelectedTab = _tabs.TabPages.Cast<TabPage>().Single(t => t.Text == "Settings")));
+        }), ToolbarAction("Settings", (_, _) => _tabs.SelectedTab = _tabs.TabPages.Cast<TabPage>().Single(t => t.Text == "Settings")),
+            ToolbarAction("Cancel Refresh", (_, _) => { if (_healthRefreshing) _running?.Cancel(); }));
         _healthGrid.Dock = DockStyle.Fill; _healthGrid.ReadOnly = true; _healthGrid.AllowUserToAddRows = false;
         _healthGrid.SelectionMode = DataGridViewSelectionMode.FullRowSelect; _healthGrid.MultiSelect = true;
         _healthGrid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill; StyleGrid(_healthGrid);
