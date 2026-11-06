@@ -1,3 +1,14 @@
+## v0.7.2 — Diagnose and recover bad HTTP update responses
+
+- On `bad HTTP response` during update checking or package download, the app probes `upgrade.mikrotik.com` through the router API (`/ping address=<hostname> count=1`). The hostname is resolved by the router, not the Windows computer. A returned IP is resolution evidence even when ICMP times out; no IP or a permission/connection failure is reported as unverified.
+- DNS failure or an unverified result stops that device with a clear reason and **no recovery reboot**. DNS success permits **one recovery reboot per device run**, shared across package passes and automatic retries. After reconnect and stability hold, preflight runs again and the update check/download is retried. A repeated bad HTTP response fails the device without another recovery reboot.
+- The verified local recovery backups from v0.7.1 are created before this recovery path can run. Existing queue failure policies apply. Manual Retry/Resume starts a new user-requested run with a new recovery allowance.
+- Package download is now separate from installation: the app waits for RouterOS to confirm download completion before requesting the installation reboot. Update checking is limited to two minutes, downloads to ten minutes and DNS diagnosis to 30 seconds. Recovery reboots use the configured reconnect/stability settings.
+- Maintenance Progress and Live Log show DNS check/result, recovery restart/reconnect, stability hold, retry and download status. DNS servers, certificate checks and HTTP/HTTPS settings are not changed.
+- This is a bounded recovery attempt, not a guaranteed cure for an HTTP/server/firewall issue. Tests use fake API replies; live-device verification remains necessary.
+
+References: [MikroTik update DNS troubleshooting](https://help.mikrotik.com/docs/spaces/RKB/pages/33325062/Upgrade+failing+to+detect+a+new+version), [router-side hostname ping](https://help.mikrotik.com/docs/spaces/ROS/pages/8323183/Ping), [download without installing](https://manual.mikrotik.com/docs/cli-reference/system/package/update/download/).
+
 ## v0.7.1 — Verified local backups before upgrades
 
 - Every manual, scheduled, retry and resumed upgrade downloads an encrypted `.backup` and a sensitive `.rsc` export before installing packages or firmware. Failure to download or verify either file blocks that device; queue failure rules still apply.

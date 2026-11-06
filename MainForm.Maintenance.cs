@@ -156,7 +156,7 @@ public sealed partial class MainForm
             var info = new Label { Dock = DockStyle.Top, Height = 100, Padding = new Padding(10), Text =
                 $"Channels: see each router row | Failure policy: {FriendlyBehavior(behavior)} | Retries: {retries}\n" +
                 "RouterOS target is resolved by the router at execution time; it is not pinned by this preview.\n" +
-                "Encrypted .backup and sensitive .rsc files are verified locally before each upgrade. Backup failure blocks that device. Files: ProgramData/MikroTik Manager/Backups/PreUpgrade.\n" +
+                "Encrypted .backup and sensitive .rsc files are verified locally before each upgrade. Backup failure blocks that device. Bad HTTP response may trigger one DNS-verified recovery reboot. Files: ProgramData/MikroTik Manager/Backups/PreUpgrade.\n" +
                 "Parallel mode is for independent devices; keep upstream routers/switches in a separate job. Test mode processes one group at a time. Failed readiness checks block that router at execution." };
             var grid = new DataGridView { Dock = DockStyle.Fill, ReadOnly = true, AllowUserToAddRows = false,
                 AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.DisplayedCells, DataSource = rows };
