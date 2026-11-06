@@ -76,7 +76,7 @@ public sealed partial class MainForm
             .Select(row => row.DataBoundItem).OfType<BackupCoverageRow>().Select(row => row.Id).ToHashSet();
         return _routers.Where(router => ids.Contains(router.Id)).ToList();
     }
-    private void TraceCoverage(string stage) { if (_smokeTest) File.AppendAllText("ui-layout-check.log", $"{DateTime.UtcNow:O} Coverage: {stage}\n"); }
+    private void TraceCoverage(string stage) { if (_smokeTest) File.AppendAllText("ui-layout-check.log", $"{DateTime.UtcNow:O} Coverage [thread {Environment.CurrentManagedThreadId}, context {SynchronizationContext.Current?.GetType().Name ?? "none"}]: {stage}\n"); }
 
     private async Task RefreshBackupCoverageAsync()
     {
@@ -122,7 +122,7 @@ public sealed partial class MainForm
             TraceCoverage("setting summary");
             _backupCoverage.Text = $"{rows.Count(r => r.Change == "Changed")} changed configurations • Select Changed, then choose one device to Compare Exports.\n{rows.Count} devices   •   {rows.Count(r => r.Coverage == "Covered")} covered   •   {rows.Count(r => r.Coverage.Contains("Never"))} never backed up   •   {rows.Count(r => r.Coverage.Contains("No active"))} unscheduled\n{rows.Count(r => r.Coverage.Contains("Overdue"))} overdue   •   {rows.Count(r => r.Coverage.Contains("failed"))} failed   •   {rows.Count(r => r.Coverage.Contains("missing"))} missing files   |   Checked {DateTime.Now:T}";
         }
-        catch (Exception ex) { if (!IsDisposed) _backupCoverage.Text = ex.Message; }
+        catch (Exception ex) { TraceCoverage(ex.ToString()); if (_smokeTest) throw; if (!IsDisposed) _backupCoverage.Text = ex.Message; }
         finally { _readingCoverage = false; TraceCoverage("finished"); }
     }
     private void CompareBackups(object? sender, EventArgs e)
