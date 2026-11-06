@@ -173,6 +173,16 @@ public sealed partial class MainForm
             actions.Controls.Add(new Button { Text = "Cancel", DialogResult = DialogResult.Cancel, AutoSize = true });
             actions.Controls.Add(new Button { Text = "Start Upgrade", DialogResult = DialogResult.OK, AutoSize = true });
             dialog.Controls.Add(grid); dialog.Controls.Add(info); dialog.Controls.Add(controls); dialog.Controls.Add(actions);
+            void SizeUpgradeNotice()
+            {
+                int width = Math.Max(100, dialog.ClientSize.Width - info.Padding.Horizontal);
+                info.Height = TextRenderer.MeasureText(info.Text, info.Font, new Size(width, int.MaxValue),
+                    TextFormatFlags.WordBreak | TextFormatFlags.TextBoxControl).Height + info.Padding.Vertical + 8;
+            }
+            dialog.SizeChanged += (_, _) => SizeUpgradeNotice();
+            info.FontChanged += (_, _) => SizeUpgradeNotice();
+            dialog.Shown += (_, _) => SizeUpgradeNotice();
+            SizeUpgradeNotice();
             if (dialog.ShowDialog(this) != DialogResult.OK) return false;
             if (window.Checked && end.Value <= DateTime.Now) { MessageBox.Show("The maintenance cutoff must be in the future."); return false; }
             _batchConcurrency = (int)concurrent.Value; _batchFailureLimit = (int)failures.Value;
