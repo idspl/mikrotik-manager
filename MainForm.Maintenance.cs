@@ -6,6 +6,7 @@ public sealed partial class MainForm
     private bool _updateInProgress;
     private DateTime? _upgradeWindowEnd;
     private bool _canaryPerGroup;
+    private bool _restartBeforeUpgrade;
 
     internal static List<Guid> PendingAfterFailures(IEnumerable<Guid> queue, IEnumerable<MaintenanceProgressRow> progress)
     {
@@ -163,14 +164,15 @@ public sealed partial class MainForm
                 AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.DisplayedCells, DataSource = rows };
             var actions = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = 45, FlowDirection = FlowDirection.RightToLeft };
             var controls = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = 64, AutoScroll = true };
+            var restart = new CheckBox { Text = "Restart before upgrade (after verified local backup)", AutoSize = true, Checked = false };
             var canary = new CheckBox { Text = "Test first router in each group; approve before continuing", AutoSize = true };
             var window = new CheckBox { Text = "Stop starting routers after", AutoSize = true };
             var end = new DateTimePicker { Format = DateTimePickerFormat.Custom, CustomFormat = "dd MMM yyyy HH:mm", Width = 175, Value = DateTime.Now.AddHours(2) };
             var concurrent = Numeric(_batchConcurrency, 0, 10000);
             var failures = Numeric(_batchFailureLimit, 0, 10000);
-            controls.Height = 105;
+            controls.AutoSize = true; controls.AutoSizeMode = AutoSizeMode.GrowAndShrink;
             controls.Controls.AddRange([new Label { Text = "Concurrent (0 = all)", AutoSize = true }, concurrent,
-                new Label { Text = "Stop after failures (0 = policy only)", AutoSize = true }, failures, canary, window, end]);
+                new Label { Text = "Stop after failures (0 = policy only)", AutoSize = true }, failures, restart, canary, window, end]);
             actions.Controls.Add(new Button { Text = "Cancel", DialogResult = DialogResult.Cancel, AutoSize = true });
             actions.Controls.Add(new Button { Text = "Start Upgrade", DialogResult = DialogResult.OK, AutoSize = true });
             dialog.Controls.Add(grid); dialog.Controls.Add(info); dialog.Controls.Add(controls); dialog.Controls.Add(actions);
@@ -188,6 +190,7 @@ public sealed partial class MainForm
             if (window.Checked && end.Value <= DateTime.Now) { MessageBox.Show("The maintenance cutoff must be in the future."); return false; }
             _batchConcurrency = (int)concurrent.Value; _batchFailureLimit = (int)failures.Value;
             if (_batchConcurrency == 0 && MessageBox.Show(this, $"Start ALL {selected.Count} selected devices concurrently? Confirm they do not depend on one another for connectivity or power.", "All at once", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes) return false;
+            _restartBeforeUpgrade = restart.Checked;
             _canaryPerGroup = canary.Checked; _upgradeWindowEnd = window.Checked ? end.Value : null;
             return true;
         }

@@ -6,15 +6,16 @@ public sealed partial class MainForm
     {
         if (_operationInProgress || _updateInProgress) return;
         if (SelectedRouters().Count == 0) { MessageBox.Show("Select devices in Devices first."); return; }
-        using var dialog = BuildUpgradeScheduleDialog(out var name, out var start, out var concurrent, out var cutoffEnabled, out var cutoff);
+        using var dialog = BuildUpgradeScheduleDialog(out var name, out var start, out var concurrent, out var cutoffEnabled, out var cutoff, out var restart);
         if (dialog.ShowDialog(this) != DialogResult.OK) return;
         _jobName.Text = name.Text; _scheduleTime.Value = start.Value;
         _scheduleConcurrency.Value = concurrent.Value; _scheduleWindow.Checked = cutoffEnabled.Checked; _scheduleEnd.Value = cutoff.Value;
+        _scheduleRestartBeforeUpgrade = restart.Checked;
         CreateSchedule(sender, e);
     }
 
     private DpiDialog BuildUpgradeScheduleDialog(out TextBox name, out DateTimePicker start,
-        out NumericUpDown concurrent, out CheckBox cutoffEnabled, out DateTimePicker cutoff)
+        out NumericUpDown concurrent, out CheckBox cutoffEnabled, out DateTimePicker cutoff, out CheckBox restart)
     {
         var dialog = new DpiDialog { Text = "Schedule Backup + Upgrade", ClientSize = new Size(570, 390),
             MinimumSize = new Size(480, 360), StartPosition = FormStartPosition.CenterParent, MaximizeBox = false };
@@ -32,6 +33,8 @@ public sealed partial class MainForm
         var check = cutoffEnabled; var end = cutoff;
         check.CheckedChanged += (_, _) => end.Enabled = check.Checked;
         AddRow(layout, "Name", name); AddRow(layout, "Run at", start); AddRow(layout, "Concurrent (0 = all)", concurrent);
+        restart = new CheckBox { Text = "Restart before upgrade (after local backup)", AutoSize = true };
+        AddRow(layout, "", restart);
         AddRow(layout, "", cutoffEnabled); AddRow(layout, "Cutoff", cutoff);
         var note = new Label { Text = "BACKUP + UPGRADE: downloads and verifies local safety backups before upgrading (ProgramData/MikroTik Manager/Backups/PreUpgrade), upgrades RouterOS/firmware and may reboot devices. For local files without upgrades, use Create Backup Schedule. Parallel upgrades require independent devices.", AutoSize = true, Dock = DockStyle.Fill, Margin = new Padding(3, 12, 3, 12) };
         int row = layout.RowCount++; layout.RowStyles.Add(new RowStyle(SizeType.AutoSize)); layout.Controls.Add(note, 0, row); layout.SetColumnSpan(note, 2);
@@ -76,7 +79,7 @@ public sealed partial class MainForm
             ? job.State == "Scheduled" ? "A future scheduled run keeps its date. If already due, this run advances it to the next occurrence."
                 : "This runs once now and does not enable the recurring schedule."
             : "This executes the one-time job now. On success it is marked Completed and will not run again at its scheduled time.";
-        if (job.Kind == ScheduledJobKind.Upgrade) effect += "\nThe saved cutoff is ignored for this manual run. Routers may reboot and interrupt service.";
+        if (job.Kind == ScheduledJobKind.Upgrade) effect += $"\nRestart before upgrade: {(job.RestartBeforeUpgrade ? "Yes" : "No")}.\nThe saved cutoff is ignored for this manual run. Routers may reboot and interrupt service.";
         string names = string.Join("\n", routers.Take(12).Select(r => "• " + r.Name + " (" + r.Host + ")"));
         if (routers.Count > 12) names += $"\n…and {routers.Count - 12} more";
         if (MessageBox.Show(this, $"Run '{job.Name}' now?\nType: {job.TypeLabel} | Routers: {routers.Count} | Concurrent: {(job.EffectiveMaxConcurrency == 0 ? "All" : job.EffectiveMaxConcurrency.ToString())}\n\n{names}\n\n{effect}", "Run Job Now", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;

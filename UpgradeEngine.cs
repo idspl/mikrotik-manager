@@ -64,6 +64,7 @@ public sealed class UpgradeEngine(SecureStore store, AppSettings settings)
                 ? Math.Max(1, options.RetryCount + 1)
                 : 1;
             var httpRecovery = new RouterUpdateRecovery();
+            var preRestart = new PreUpgradeRestart();
             Exception? failure = null;
             bool completed = false;
             string outcome = "Failed";
@@ -77,7 +78,7 @@ public sealed class UpgradeEngine(SecureStore store, AppSettings settings)
                     Report(router, "Preflight", attempt, 5, "Running", "Checking API, identity, version and free storage");
                     RouterHealthCheck health = await PreflightAsync(router, cancellationToken);
                     if (!health.Passed) throw new InvalidOperationException(health.Summary);
-                    bool changed = await RunRouterAsync(router, attempt, httpRecovery, cancellationToken);
+                    bool changed = await RunRouterAsync(router, attempt, httpRecovery, preRestart, options.RestartBeforeUpgrade, cancellationToken);
                     outcome = changed ? "Upgraded successfully" : "Already current; verified";
                     failure = null;
                     router.LastStatus = "Completed";
@@ -166,7 +167,7 @@ public sealed class UpgradeEngine(SecureStore store, AppSettings settings)
         }
     }
 
-    private async Task<bool> RunRouterAsync(RouterRecord router, int attempt, RouterUpdateRecovery httpRecovery, CancellationToken ct)
+    private async Task<bool> RunRouterAsync(RouterRecord router, int attempt, RouterUpdateRecovery httpRecovery, PreUpgradeRestart preRestart, bool restartBeforeUpgrade, CancellationToken ct)
     {
         bool changed = false;
         Log(router, "START", "Safe upgrade started");
@@ -190,6 +191,19 @@ public sealed class UpgradeEngine(SecureStore store, AppSettings settings)
             if (!afterBackup.Passed) throw new InvalidOperationException(afterBackup.Summary);
             await api.DisposeAsync();
             api = await RouterOsApiClient.ConnectAsync(router, _settings, ct);
+
+            await preRestart.RunAsync(restartBeforeUpgrade, async () => {
+                Log(router, "PRE-UPGRADE RESTART", "Verified local backup complete; restarting before package upgrade");
+                Report(router, "Pre-upgrade restart", attempt, 34, "Running", "Restarting before RouterOS upgrade");
+                await api.SendExpectedDisconnectAsync("/system/reboot", ct);
+            }, async () => {
+                await api.DisposeAsync();
+                api = await WaitForRouterAsync(router, "Pre-upgrade", attempt, 34, ct);
+                var health = await PreflightAsync(router, ct);
+                if (!health.Passed) throw new InvalidOperationException("Post-restart preflight failed: " + health.Summary);
+                await VerifyInterfacesAsync(api, router, _settings.InterfaceRecoverySeconds, ct);
+                Report(router, "Pre-upgrade restart verified", attempt, 39, "Running", "API, stability and readiness checks passed");
+            }, ct);
 
             const int maximumPackagePasses = 4;
             for (int pass = 1; pass <= maximumPackagePasses; pass++)

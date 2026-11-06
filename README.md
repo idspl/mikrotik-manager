@@ -1,3 +1,8 @@
+## v0.7.5 — Optional restart before upgrade and larger device details
+
+- Upgrade Preview and Create Upgrade Schedule include **Restart before upgrade**, off by default. Verified local recovery backups come first, then one restart, API reconnect/stability wait, readiness and configured critical-interface checks, followed by RouterOS/firmware upgrades. Progress shows the restart and recovery stages. Automatic retries never resend the pre-upgrade restart; manual new runs can request it again. Backup-only jobs are unchanged. Scheduled jobs retain the preference in desktop, portable task and Windows service execution.
+- Device Details opens at 90% of the monitor width and 85% of its height by default, remembers size/maximized state, and fits the current monitor. Interface columns use content widths and horizontal scrolling instead of squeezing every field into the window.
+
 ## v0.7.4 — Menu tooltips and reliable release validation
 
 - Disable toolbar and menu-item tooltip popups across all pages, nested menus and context menus in both themes. Menu titles no longer float over the next option when a dropdown is open. Icon-only sidebar tooltips remain available.

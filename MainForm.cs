@@ -43,7 +43,7 @@ public sealed partial class MainForm : Form
         AppTheme.Set(_store.LoadSettings().Theme);
         _defaultReleaseChannel = _store.LoadSettings().UpdateChannel;
         _routerContextMenu = new ContextMenuStrip(_components);
-        Text = "MikroTik Manager 0.7.4";
+        Text = "MikroTik Manager 0.7.5";
         Font = new Font("Segoe UI", 9F);
         Icon = AppIcon.Current;
         Width = 1440;
@@ -188,8 +188,8 @@ public sealed partial class MainForm : Form
         updatesMenu.DropDownItems.Add("Check for Updates", null, async (_, _) => await CheckForUpdatesAsync(true));
         updatesMenu.DropDownItems.Add("Navigation Shortcuts", null, ShowNavigationHelp);
         updatesMenu.DropDownItems.Add(new ToolStripSeparator());
-        updatesMenu.DropDownItems.Add("About MikroTik Manager 0.7.4", null, (_, _) =>
-            MessageBox.Show("MikroTik Manager 0.7.4\n\nMade for MikroTik\nIndependent open-source software by Indigo Data Services Pvt Ltd.", Text,
+        updatesMenu.DropDownItems.Add("About MikroTik Manager 0.7.5", null, (_, _) =>
+            MessageBox.Show("MikroTik Manager 0.7.5\n\nMade for MikroTik\nIndependent open-source software by Indigo Data Services Pvt Ltd.", Text,
                 MessageBoxButtons.OK, MessageBoxIcon.Information));
         actions.Items.AddRange([inventoryMenu, selectionMenu, groupMenu, maintenanceMenu, upgradeMenu, updatesMenu]);
 
@@ -439,6 +439,9 @@ public sealed partial class MainForm : Form
             {
                 Theme = _themeChoice.SelectedItem?.ToString() ?? "Dark",
                 NavigationCollapsed = _navigationCollapsed,
+                DeviceDetailsWidth = _store.LoadSettings().DeviceDetailsWidth,
+                DeviceDetailsHeight = _store.LoadSettings().DeviceDetailsHeight,
+                DeviceDetailsMaximized = _store.LoadSettings().DeviceDetailsMaximized,
                 DefaultApiPort = (int)apiPort.Value,
                 UseApiSsl = ssl.Checked,
                 AllowInvalidTlsCertificate = invalid.Checked,
@@ -983,7 +986,7 @@ public sealed partial class MainForm : Form
             _activeUpgrade = engine;
             engine.ConfirmGroupAsync = ConfirmGroupContinuationAsync;
             MaintenanceRunResult result = await Task.Run(
-                () => engine.RunSequentialAsync(selected, new UpgradeRunOptions(behavior, retries, _upgradeWindowEnd, _canaryPerGroup, _batchConcurrency, _batchFailureLimit), token), token);
+                () => engine.RunSequentialAsync(selected, new UpgradeRunOptions(behavior, retries, _upgradeWindowEnd, _canaryPerGroup, _batchConcurrency, _batchFailureLimit, _restartBeforeUpgrade), token), token);
             FlushUiUpdates();
             MaintenanceReportFiles reports = await new MaintenanceReportService(_store).WriteAsync(result, token);
             string outcome = engine.PauseRequested && result.Routers.Count < selected.Count ? "Paused after active devices" : "Maintenance finished";
@@ -1040,7 +1043,7 @@ public sealed partial class MainForm : Form
             WindowEnd = _scheduleWindow.Checked ? _scheduleEnd.Value : null,
             RouterIds = selected.Select(x => x.Id).ToList(),
             FailureBehavior = (FailureBehavior)(_failureBehavior.SelectedItem ?? FailureBehavior.RetryThenSkip),
-            RetryCount = (int)_retryCount.Value, MaxConcurrency = (int)_scheduleConcurrency.Value
+            RetryCount = (int)_retryCount.Value, MaxConcurrency = (int)_scheduleConcurrency.Value, RestartBeforeUpgrade = _scheduleRestartBeforeUpgrade
         };
         try
         {

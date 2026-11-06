@@ -11,7 +11,26 @@ public sealed partial class MainForm
 
     private void ShowDeviceDetails(RouterRecord router)
     {
-        using var dialog = new DpiDialog { Text = router.Name + " — Device Details", Width = 1060, Height = 740, MinimumSize = new Size(760, 520), StartPosition = FormStartPosition.CenterParent, Font = Font };
+        using var dialog = new DpiDialog { Text = router.Name + " — Device Details", Width = 1060, Height = 740, MinimumSize = new Size(760, 520), StartPosition = FormStartPosition.CenterParent };
+        dialog.Shown += (_, _) => {
+            var saved = _store.LoadSettings();
+            var area = Screen.FromControl(this).WorkingArea;
+            float dpi = dialog.DeviceDpi / 96f;
+            dialog.MinimumSize = new Size(Math.Min((int)(760 * dpi), area.Width), Math.Min((int)(520 * dpi), area.Height));
+            int width = saved.DeviceDetailsWidth > 0 ? (int)(saved.DeviceDetailsWidth * dpi) : (int)(area.Width * .90);
+            int height = saved.DeviceDetailsHeight > 0 ? (int)(saved.DeviceDetailsHeight * dpi) : (int)(area.Height * .85);
+            dialog.Size = new Size(Math.Clamp(width, dialog.MinimumSize.Width, area.Width), Math.Clamp(height, dialog.MinimumSize.Height, area.Height));
+            dialog.Location = new Point(area.Left + (area.Width - dialog.Width) / 2, area.Top + (area.Height - dialog.Height) / 2);
+            if (saved.DeviceDetailsMaximized) dialog.WindowState = FormWindowState.Maximized;
+        };
+        dialog.FormClosing += (_, _) => {
+            var saved = _store.LoadSettings();
+            var bounds = dialog.WindowState == FormWindowState.Normal ? dialog.Bounds : dialog.RestoreBounds;
+            saved.DeviceDetailsWidth = (int)(bounds.Width * 96f / dialog.DeviceDpi);
+            saved.DeviceDetailsHeight = (int)(bounds.Height * 96f / dialog.DeviceDpi);
+            saved.DeviceDetailsMaximized = dialog.WindowState == FormWindowState.Maximized;
+            try { _store.SaveSettings(saved); } catch (Exception ex) { _pendingLog.Enqueue("Could not save Device Details size: " + ex.Message); }
+        };
         using var cancellation = new CancellationTokenSource();
         var tabs = new TabControl { Dock = DockStyle.Fill };
         TabPage overview = new TabPage("Overview"), interfaces = new TabPage("Interfaces"), versions = new TabPage("Versions"), backups = new TabPage("Backup History");
@@ -32,7 +51,7 @@ public sealed partial class MainForm
         metrics.CellFormatting += (_, e) => ColorMetrics(metrics, e);
         versionGrid.CellFormatting += (_, e) => ColorMetrics(versionGrid, e);
         var history = new SmoothGrid { Dock = DockStyle.Fill, ReadOnly = true, AllowUserToAddRows = false, DataSource = router.Backups.OrderByDescending(b => b.CreatedAt).ToList(), AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.DisplayedCells }; StyleGrid(history); backups.Controls.Add(history);
-        var ports = new SmoothGrid { Dock = DockStyle.Fill, ReadOnly = true, AllowUserToAddRows = false, SelectionMode = DataGridViewSelectionMode.FullRowSelect, MultiSelect = false, AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill }; StyleGrid(ports);
+        var ports = new SmoothGrid { Dock = DockStyle.Fill, ReadOnly = true, AllowUserToAddRows = false, SelectionMode = DataGridViewSelectionMode.FullRowSelect, MultiSelect = false, AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.DisplayedCells }; StyleGrid(ports);
         var sample = new SmoothGrid { Dock = DockStyle.Bottom, Height = 220 }; ConfigureDashboardGrid(sample, ["Reading", "Value"]);
         ReplaceItems(sample, [["Traffic / optics", "Select a port and read its sensors"]]);
         sample.CellFormatting += (_, e) => {
