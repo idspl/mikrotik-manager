@@ -76,14 +76,18 @@ public sealed partial class MainForm
             .Select(row => row.DataBoundItem).OfType<BackupCoverageRow>().Select(row => row.Id).ToHashSet();
         return _routers.Where(router => ids.Contains(router.Id)).ToList();
     }
+    private void TraceCoverage(string stage) { if (_smokeTest) File.AppendAllText("ui-layout-check.log", $"{DateTime.UtcNow:O} Coverage: {stage}\n"); }
+
     private async Task RefreshBackupCoverageAsync()
     {
+        TraceCoverage("enter");
         if (_readingCoverage) return; _readingCoverage = true;
         try
         {
             // Snapshot mutable inventory on the UI thread; file probes run in the background.
             var snapshots = _routers.Select(r => new { r.Id, r.Name, r.Site, Last = r.Backups.LastOrDefault(), r.LastBackupAttemptAt, r.LastBackupError, r.BackupChange, r.BackupChangeAt }).ToList();
             var schedules = _jobs.Where(j => j.Kind == ScheduledJobKind.Backup && j.State is "Scheduled" or "Running").Select(j => new { Ids = j.RouterIds.ToArray(), j.ScheduledLocalTime, j.State }).ToList();
+            TraceCoverage("snapshot ready");
             var rows = await Task.Run(() => snapshots.Select(r => {
                 var issues = new List<string>(); var jobs = schedules.Where(j => j.Ids.Contains(r.Id)).ToList();
                 if (r.Last is null) issues.Add("Never backed up");
@@ -93,17 +97,21 @@ public sealed partial class MainForm
                 if (!string.IsNullOrEmpty(r.LastBackupError)) issues.Add("Last backup failed");
                 return new BackupCoverageRow(r.Id, r.Name, r.Site, issues.Count == 0 ? "Covered" : string.Join("; ", issues), r.Last?.CreatedAt, r.LastBackupAttemptAt, r.LastBackupError, r.BackupChange, r.BackupChangeAt);
             }).ToList());
+            TraceCoverage("file checks completed");
             if (IsDisposed) return;
             // Capture after the await so clicks made while the file checks ran are retained.
             var selectedIds = SelectedBackupRouters().Select(r => r.Id).ToHashSet();
             int first = _backupGrid.FirstDisplayedScrollingRowIndex;
+            TraceCoverage("binding rows");
             _backupGrid.DataSource = rows;
+            TraceCoverage("rows bound");
             _backupGrid.ClearSelection();
             foreach (DataGridViewRow row in _backupGrid.Rows)
                 if (row.DataBoundItem is BackupCoverageRow item) row.Selected = selectedIds.Contains(item.Id);
             if (first >= 0 && _backupGrid.Rows.Count > 0)
                 _backupGrid.FirstDisplayedScrollingRowIndex = Math.Min(first, _backupGrid.Rows.Count - 1);
             if (_backupGrid.Columns.Contains("Id")) _backupGrid.Columns["Id"].Visible = false;
+            TraceCoverage("configuring columns");
             foreach (DataGridViewColumn column in _backupGrid.Columns)
             {
                 column.HeaderText = column.Name switch { "LastBackup" => "Last backup", "LastAttempt" => "Last attempt", "ComparedAt" => "Compared at", "Change" => "Configuration change", _ => column.Name };
@@ -111,10 +119,11 @@ public sealed partial class MainForm
                 column.FillWeight = column.Name == "Coverage" ? 240 : column.Name == "Device" ? 200 : 100;
                 if (column.Name is "LastBackup" or "LastAttempt" or "ComparedAt") column.DefaultCellStyle.Format = "dd MMM yyyy HH:mm";
             }
+            TraceCoverage("setting summary");
             _backupCoverage.Text = $"{rows.Count(r => r.Change == "Changed")} changed configurations • Select Changed, then choose one device to Compare Exports.\n{rows.Count} devices   •   {rows.Count(r => r.Coverage == "Covered")} covered   •   {rows.Count(r => r.Coverage.Contains("Never"))} never backed up   •   {rows.Count(r => r.Coverage.Contains("No active"))} unscheduled\n{rows.Count(r => r.Coverage.Contains("Overdue"))} overdue   •   {rows.Count(r => r.Coverage.Contains("failed"))} failed   •   {rows.Count(r => r.Coverage.Contains("missing"))} missing files   |   Checked {DateTime.Now:T}";
         }
         catch (Exception ex) { if (!IsDisposed) _backupCoverage.Text = ex.Message; }
-        finally { _readingCoverage = false; }
+        finally { _readingCoverage = false; TraceCoverage("finished"); }
     }
     private void CompareBackups(object? sender, EventArgs e)
     {

@@ -98,7 +98,9 @@ public sealed partial class MainForm
         }
         _tabs.SelectedTab = _maintenancePage; Capture("progress");
         _tabs.SelectedTab = _schedulesPage; Capture("schedules");
+        TraceCoverage("selecting Backups tab");
         _tabs.SelectedTab = _tabs.TabPages.Cast<TabPage>().Single(p => p.Text == "Backups");
+        TraceCoverage("Backups tab selected");
         var coverageWait = System.Diagnostics.Stopwatch.StartNew();
         while (_readingCoverage && coverageWait.Elapsed < TimeSpan.FromSeconds(10)) { Application.DoEvents(); Thread.Sleep(10); }
         if (_readingCoverage || _backupGrid.Rows.Count != _routers.Count) throw new Exception("Backup coverage did not populate");

@@ -9,6 +9,7 @@ public sealed partial class MainForm : Form
     private readonly TabControl _tabs = new() { Dock = DockStyle.Fill, Appearance = TabAppearance.FlatButtons, ItemSize = new Size(0, 1), SizeMode = TabSizeMode.Fixed };
     private TabPage _maintenancePage = null!;
     private readonly SecureStore _store;
+    private readonly bool _smokeTest;
     private readonly SortableBindingList<RouterRecord> _routers;
     private readonly BindingList<UpgradeJob> _jobs;
     private readonly DataGridView _routerGrid = new SmoothGrid();
@@ -34,6 +35,7 @@ public sealed partial class MainForm : Form
 
     public MainForm(SecureStore? store = null, bool smokeTest = false)
     {
+        _smokeTest = smokeTest;
         SuspendLayout();
         AutoScaleDimensions = new SizeF(96F, 96F);
         AutoScaleMode = AutoScaleMode.Dpi;

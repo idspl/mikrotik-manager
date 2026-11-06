@@ -12,17 +12,15 @@ permissions:
   contents: write
 
 jobs:
+  validate:
+    uses: ./.github/workflows/windows-build.yml
   release:
+    needs: validate
     runs-on: windows-latest
 
     steps:
       - name: Check out source
         uses: actions/checkout@v4
-
-      - name: Set up .NET
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: 8.0.x
 
       - name: Read application version
         id: version
@@ -33,22 +31,11 @@ jobs:
           "version=$version" >> $env:GITHUB_OUTPUT
           "tag=v$version" >> $env:GITHUB_OUTPUT
 
-      - name: Publish self-contained Windows executable
-        shell: pwsh
-        run: |
-          dotnet publish MikroTikManager.csproj `
-            -c Release `
-            -r win-x64 `
-            --self-contained true `
-            -p:PublishSingleFile=true `
-            -p:IncludeNativeLibrariesForSelfExtract=true `
-            -p:DebugType=None `
-            -p:DebugSymbols=false `
-            -o release/win-x64
-
-      - name: Build Windows installer
-        shell: pwsh
-        run: ./installer/Build-Installer.ps1
+      - name: Download tested executable and installer
+        uses: actions/download-artifact@v4
+        with:
+          name: MikroTikManager-win-x64
+          path: release
 
       - name: Create SHA-256 checksum
         shell: pwsh
