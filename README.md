@@ -4,6 +4,7 @@
 - Collapse the sidebar to icons using its top button or **Ctrl+B**. The preference is saved; icons retain labels in tooltips and accessible names. Sidebar rows have a consistent compact height.
 - **Ctrl+1–8** opens sidebar pages in order. **Ctrl+Tab / Ctrl+Shift+Tab** moves between pages. **Ctrl+F** opens Devices and focuses search. Navigation help is available from Settings and Devices → Help.
 - Settings keeps Save Settings in the fixed top toolbar while its form scrolls. Live Log adds Select All, Copy Selected and Go to Latest.
+- Backup-folder, import and manual-router dialogs keep action buttons in a fixed footer, wrap instructions and scroll long content. Initial sizing is clamped to the monitor work area.
 - Restored completed maintenance rows now show 100% instead of 0%. Selection, active-job controls and upgrade/backup behavior are retained.
 
 ## v0.7.2 — Diagnose and recover bad HTTP update responses
