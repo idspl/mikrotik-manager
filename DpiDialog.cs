@@ -41,6 +41,8 @@ public class DpiDialog : Form
             try
             {
                 var area = Screen.FromControl(this).WorkingArea;
+                MinimumSize = new Size(Math.Min(MinimumSize.Width, area.Width - 24),
+                    Math.Min(MinimumSize.Height, area.Height - 24));
                 int width = Math.Min(Width, area.Width - 24);
                 Width = Math.Max(280, width);
                 PerformLayout();

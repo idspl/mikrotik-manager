@@ -64,6 +64,8 @@ public sealed partial class MainForm
         {
             File.AppendAllText("ui-layout-check.log", "Compact dialog " + compact.GetType().Name + "\n");
             compact.Show(this); Application.DoEvents(); ApplyLayoutTestScale(compact, scale); Application.DoEvents();
+            if (!Screen.FromControl(compact).WorkingArea.Contains(compact.Bounds))
+                throw new Exception("Dialog exceeds monitor working area: " + compact.GetType().Name + " at " + scale);
             foreach (Button action in new[] { (Button)compact.AcceptButton!, (Button)compact.CancelButton! })
             {
                 var bounds = compact.RectangleToClient(action.RectangleToScreen(action.ClientRectangle));
