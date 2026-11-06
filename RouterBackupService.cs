@@ -29,7 +29,7 @@ public sealed class RouterBackupService(AppSettings settings, int? retentionDays
             string safeName = SafeName(router.Name);
             string idSuffix = router.Id.ToString("N")[..8];
             string localStem = $"{safeName}_{SafeName(router.Host)}_{router.ApiPort}_{stamp}_{idSuffix}";
-            string remoteStem = "indigo-" + DateTime.Now.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture) + "-" + idSuffix;
+            string remoteStem = "indigo-" + DateTime.Now.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture) + "-" + idSuffix + "-" + Guid.NewGuid().ToString("N")[..8];
             string localBackup = Path.Combine(outputFolder, localStem + ".backup");
             string localExport = Path.Combine(outputFolder, localStem + ".rsc");
             string result;
@@ -117,6 +117,8 @@ public sealed class RouterBackupService(AppSettings settings, int? retentionDays
             await api.DownloadFileAsync(remoteStem + ".backup", localBackup, ct);
             Log(router, "Downloading show-sensitive .rsc");
             await api.DownloadFileAsync(remoteStem + ".rsc", localExport, ct);
+            await VerifyFileAsync(localBackup, ct);
+            await VerifyFileAsync(localExport, ct);
         }
         finally
         {

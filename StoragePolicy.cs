@@ -11,6 +11,9 @@ public static class StoragePolicy
         int fallback = Math.Max(0, fallbackMb);
         string name = model?.Trim() ?? "";
 
+        if (totalBytes > 0 && ToMb(totalBytes) <= 20)
+            return new StorageRequirement(2, "16 MB storage tier");
+
         // CCR devices should keep a larger safety margin even when a legacy
         // resource response reports an unexpectedly small or rounded disk.
         if (name.StartsWith("CCR", StringComparison.OrdinalIgnoreCase))
@@ -19,8 +22,6 @@ public static class StoragePolicy
         if (totalBytes > 0)
         {
             double totalMb = ToMb(totalBytes);
-            if (totalMb <= 20)
-                return new StorageRequirement(3, "16 MB storage tier");
             if (totalMb <= 64)
                 return new StorageRequirement(8, "21-64 MB storage tier");
             return new StorageRequirement(16, "65 MB+ storage tier");
@@ -30,7 +31,7 @@ public static class StoragePolicy
             name.StartsWith("RB750", StringComparison.OrdinalIgnoreCase) ||
             name.StartsWith("RB760", StringComparison.OrdinalIgnoreCase) ||
             name.StartsWith("RB960", StringComparison.OrdinalIgnoreCase))
-            return new StorageRequirement(3, "hEX family fallback");
+            return new StorageRequirement(2, "hEX family fallback");
 
         return new StorageRequirement(fallback, "fallback setting");
     }

@@ -1,5 +1,3 @@
-using System.Text.RegularExpressions;
-
 namespace MikroTikManager;
 
 public sealed class UpgradeEngine(SecureStore store, AppSettings settings)
@@ -131,7 +129,7 @@ public sealed class UpgradeEngine(SecureStore store, AppSettings settings)
             await using RouterOsApiClient api = await RouterOsApiClient.ConnectAsync(router, _settings, ct);
             RouterSnapshot snapshot = await GetSnapshotAsync(api, ct);
             IReadOnlyDictionary<string, string> resource = await ReadOneAsync(api, "/system/resource/print", ct);
-            long.TryParse(resource.GetValueOrDefault("free-hdd-space"), out long freeBytes);
+            bool freeReported = long.TryParse(resource.GetValueOrDefault("free-hdd-space"), out long freeBytes);
             long.TryParse(resource.GetValueOrDefault("total-hdd-space"), out long totalBytes);
             StorageRequirement storage = StoragePolicy.Resolve(snapshot.Model, totalBytes, _settings.MinimumFreeDiskMb);
             router.ApiStatus = "Online"; router.LastSeenAt = DateTime.Now;
@@ -149,7 +147,7 @@ public sealed class UpgradeEngine(SecureStore store, AppSettings settings)
             if (string.IsNullOrWhiteSpace(snapshot.RouterOsVersion))
                 return new RouterHealthCheck(router, false, "RouterOS version was not returned.", snapshot,
                     freeBytes, totalBytes, storage.RequiredFreeMb, storage.Source, DateTime.Now);
-            if (freeBytes > 0 && freeBytes < required)
+            if (freeReported && freeBytes < required)
                 return new RouterHealthCheck(router, false,
                     $"Only {StoragePolicy.ToMb(freeBytes):0.0} MB free; {storage.RequiredFreeMb} MB is required ({storage.Source}).",
                     snapshot, freeBytes, totalBytes, storage.RequiredFreeMb, storage.Source, DateTime.Now);
@@ -180,29 +178,17 @@ public sealed class UpgradeEngine(SecureStore store, AppSettings settings)
             Log(router, "PRECHECK", $"Identity={before.Identity}; model={before.Model}; RouterOS={before.RouterOsVersion}; firmware={before.CurrentFirmware}/{before.UpgradeFirmware}");
             Report(router, "Preflight", attempt, 20, "Running", $"{before.Model}; RouterOS {before.RouterOsVersion}");
 
-            string stem = SafeName($"preupgrade-{router.Name}-{DateTime.Now:yyyyMMdd-HHmm}");
-            if (string.IsNullOrEmpty(router.BackupPassword))
-                router.BackupPassword = Convert.ToHexString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(18));
-            // Persist the generated recovery secret before creating its encrypted backup.
-            lock (_sync) {
-            var saved = _store.LoadRouters();
-            var savedRouter = saved.FirstOrDefault(x => x.Id == router.Id);
-            if (savedRouter is not null) { savedRouter.BackupPassword = router.BackupPassword; _store.SaveRouters(saved); }
-            }
-            Report(router, "Safety backup", attempt, 25, "Running", "Creating encrypted on-router safety backup");
-            try
-            {
-                await api.ExecuteAsync("/system/backup/save", ct, $"name={stem}", $"password={router.BackupPassword}", "encryption=aes-sha256");
-            }
-            catch (RouterOsApiException)
-            {
-                // Compatibility fallback for RouterOS releases predating the encryption selector.
-                await api.ExecuteAsync("/system/backup/save", ct, $"name={stem}", $"password={router.BackupPassword}");
-            }
-            Log(router, "BACKUP", stem + ".backup created with encryption");
-            Report(router, "Safety backup", attempt, 30, "Running", stem + ".backup created");
-            await api.ExecuteAsync("/export", ct, $"file={stem}");
-            Log(router, "EXPORT", stem + ".rsc created; sensitive values omitted by RouterOS default");
+            Report(router, "Safety backup", attempt, 25, "Running", "Creating and verifying local .backup and sensitive .rsc files");
+            var backups = new UpgradeBackupService(_store, _settings, _sync);
+            string backupFolder = await backups.SaveAsync(router, ct,
+                message => Log(router, "BACKUP", message));
+            Report(router, "Safety backup", attempt, 32, "Running", "Local recovery files verified: " + backupFolder);
+            Log(router, "BACKUP", "Verified local recovery files: " + backupFolder);
+            // Recheck after temporary backup files have been removed, before any install command.
+            RouterHealthCheck afterBackup = await PreflightAsync(router, ct);
+            if (!afterBackup.Passed) throw new InvalidOperationException(afterBackup.Summary);
+            await api.DisposeAsync();
+            api = await RouterOsApiClient.ConnectAsync(router, _settings, ct);
 
             const int maximumPackagePasses = 4;
             for (int pass = 1; pass <= maximumPackagePasses; pass++)
@@ -384,7 +370,6 @@ public sealed class UpgradeEngine(SecureStore store, AppSettings settings)
         Progress?.Invoke(new MaintenanceProgressUpdate(router.Id, stage, attempt, progress, result, message));
     }
 
-    private static string SafeName(string value) => Regex.Replace(value, "[^A-Za-z0-9._-]", "_");
     private static string FirstNonEmpty(params string?[] values)
         => values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value)) ?? "";
     private static bool VersionMatches(string a, string b) => NormalizeVersion(a).Equals(NormalizeVersion(b), StringComparison.OrdinalIgnoreCase);

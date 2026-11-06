@@ -33,7 +33,7 @@ public sealed partial class MainForm
         check.CheckedChanged += (_, _) => end.Enabled = check.Checked;
         AddRow(layout, "Name", name); AddRow(layout, "Run at", start); AddRow(layout, "Concurrent (0 = all)", concurrent);
         AddRow(layout, "", cutoffEnabled); AddRow(layout, "Cutoff", cutoff);
-        var note = new Label { Text = "BACKUP + UPGRADE: creates on-router safety backups, upgrades RouterOS/firmware and may reboot devices. For local files without upgrades, use Create Backup Schedule. Parallel upgrades require independent devices.", AutoSize = true, Dock = DockStyle.Fill, Margin = new Padding(3, 12, 3, 12) };
+        var note = new Label { Text = "BACKUP + UPGRADE: downloads and verifies local safety backups before upgrading (ProgramData/MikroTik Manager/Backups/PreUpgrade), upgrades RouterOS/firmware and may reboot devices. For local files without upgrades, use Create Backup Schedule. Parallel upgrades require independent devices.", AutoSize = true, Dock = DockStyle.Fill, Margin = new Padding(3, 12, 3, 12) };
         int row = layout.RowCount++; layout.RowStyles.Add(new RowStyle(SizeType.AutoSize)); layout.Controls.Add(note, 0, row); layout.SetColumnSpan(note, 2);
         scroll.Controls.Add(layout);
         var footer = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, FlowDirection = FlowDirection.RightToLeft, Padding = new Padding(12), BackColor = Color.FromArgb(232, 241, 252) };

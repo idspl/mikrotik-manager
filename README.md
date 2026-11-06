@@ -1,3 +1,12 @@
+## v0.7.1 — Verified local backups before upgrades
+
+- Every manual, scheduled, retry and resumed upgrade downloads an encrypted `.backup` and a sensitive `.rsc` export before installing packages or firmware. Failure to download or verify either file blocks that device; queue failure rules still apply.
+- Location: `%ProgramData%\MikroTik Manager\Backups\PreUpgrade\<device-id>\MikroTik-Manager-Backups_<timestamp>_<id>`. Open **Backups → Backup Actions → Open Pre-upgrade Backups**, or select a device and open its latest folder/history.
+- Each folder includes sizes, SHA-256 hashes and the backup encryption password in `BackupManifest.csv`. The export and manifest contain secrets: protect access to this folder. The installer restricts ProgramData app data to Administrators and SYSTEM.
+- Pre-upgrade recovery copies are retained until manually removed; backup-only retention settings do not remove them. Only temporary files created by the current backup operation are cleaned from the router; older `preupgrade-*` files are untouched.
+- Minimum free storage for the 16 MB tier is now **2 MB** (not RAM). Larger storage tiers keep their existing rules. A reported zero free bytes fails preflight. Storage is rechecked after backup cleanup, before upgrade.
+- Backup-only parallel scheduling remains unchanged. Windows regression tests use fake downloads; no live routers are contacted.
+
 ## v0.7.0 — High-DPI layout and Windows service installer
 
 Download **MikroTikManager-Setup.exe** for the installed edition, or keep using **MikroTikManager.exe** in portable mode. Both are self-contained Windows x64 builds with SHA-256 files. Setup requires administrator access.
@@ -67,7 +76,7 @@ Use a test router before production deployment. Router upgrades, reboots and sen
 - Settings → Health interval enables periodic polling while the app is open (0 = off, default). At most eight devices are checked concurrently; checks are bounded and deferred during maintenance, updates, dialogs and due schedules. This is desktop polling, not a Windows monitoring service; no retained time-series charts yet.
 - Device / Interfaces adds RX/TX error and queue-drop counters to existing link, traffic, speed and optical diagnostics. Unsupported sensors/counters show Unavailable.
 - Backups adds Retry Failed Backups (selected failures, or all recorded failures if nothing is selected), Open Backup Folder, Select Changed and configuration-change indicators. Changes compare the last two exports after each successful new backup, ignoring the export timestamp; comparison is limited to 4 MiB per file. Existing histories acquire indicators on their next backup. Compare Exports keeps content hidden unless explicitly revealed.
-- Job labels and confirmations distinguish Backup only from Backup + upgrade. Existing jobs retain their actual type: a backup-like name does not convert an upgrade job. Upgrade safety backups remain on-router; Backup only downloads local files.
+- Job labels and confirmations distinguish Backup only from Backup + upgrade. Existing jobs retain their actual type: a backup-like name does not convert an upgrade job. Both workflows download local files; upgrade now requires verified local recovery copies before proceeding.
 - Dashboard tables now use themed grids across their full width, removing the white trailing header areas. Navigation has consistent line icons and more spacing; light/dark appearance remains in Settings.
 - Device data is read via RouterOS API only. No SSH, Winbox-port automation, PPPoE-specific requirement or native macOS build.
 
@@ -163,7 +172,7 @@ Use a test router before production deployment. Router upgrades, reboots and sen
 - **Right-click > Edit Credentials:** change the saved username/password, optionally test API login, then save with DPAPI encryption. A blank new-password field preserves the saved password; an explicit checkbox permits an empty password. This does not modify accounts on the router.
 - **Upgrade > Pause After Current Router:** completes the current router and its configured retries, then ends the queue. Use Resume Incomplete Queue to continue after reviewing a fresh preview.
 - **Upgrade > Maintenance History:** encrypted, atomically saved stage history under `C:\ProgramData\MikroTik Manager\History`. Each stage includes timestamps, attempt, versions and result. The newest run's incomplete queue is restored after restart; no router operation resumes automatically.
-- Every interactive upgrade/retry/resume shows a live readiness preview and exact queue order. The RouterOS target is resolved at execution, not pinned. Safety backups are on-router `preupgrade-*` files; use Backup Selected for local copies.
+- Every interactive upgrade/retry/resume shows a live readiness preview and exact queue order. The RouterOS target is resolved at execution, not pinned. Safety backups are downloaded and verified locally under `%ProgramData%\MikroTik Manager\Backups\PreUpgrade` before any package or firmware installation.
 - Progress shows elapsed time, numbered reconnect attempts, a stability countdown and an Already current outcome. Percentages are stage estimates, not measured download progress.
 - **Help > Check for Updates:** download the official GitHub EXE and its SHA-256 checksum, verify, then confirm install/restart. Startup checks use the same flow when enabled. Updates preserve the executable path, settings and scheduled-task paths; the previous EXE is retained as `.previous`.
 - The updater needs write access to the EXE folder and does not silently elevate. If access is denied, replace the EXE manually or run from an appropriate writable folder. Downloaded updates remain unsigned; a checksum is not a malware scan or digital signature.
@@ -191,7 +200,7 @@ Install 0.2.4 manually once to gain the self-updater for later releases. No chan
 ## 0.2.1 model-aware storage preflight
 
 - Reads the model, free storage and total storage directly from RouterOS during preflight.
-- Automatically requires **3 MB** free on 16–20 MB devices, **8 MB** on 21–64 MB devices and **16 MB** on devices with 65 MB or more.
+- Automatically requires **2 MB** free on 16–20 MB devices, **8 MB** on 21–64 MB devices and **16 MB** on devices with 65 MB or more.
 - CCR models always require at least **16 MB** free.
 - When total storage is unavailable, hEX and CCR model-family rules are used before the configurable fallback.
 - Added a **Storage** column showing free, total and required space for each router.

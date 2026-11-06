@@ -7,6 +7,7 @@ namespace MikroTikManager;
 
 public sealed class SecureStore
 {
+    private static readonly object FileAccessLock = new();
     private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
     public string RootDirectory { get; }
     public string LogDirectory => Path.Combine(RootDirectory, "Logs");
@@ -52,6 +53,7 @@ public sealed class SecureStore
 
     public AppSettings LoadSettings()
     {
+        lock (FileAccessLock)
         try { return JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(SettingsPath), JsonOptions) ?? new(); }
         catch { return new(); }
     }
@@ -83,13 +85,20 @@ public sealed class SecureStore
 
     private static void AtomicWrite(string path, byte[] bytes)
     {
+        lock (FileAccessLock)
+        {
         string temporary = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
         try { File.WriteAllBytes(temporary, bytes); File.Move(temporary, path, true); }
         finally { if (File.Exists(temporary)) File.Delete(temporary); }
+        }
     }
 
     private static T? LoadProtected<T>(string path)
     {
+        // Windows rename-overwrite can race with a reader holding the old destination.
+        // Serialize file handles across store instances, including UI and backup workers.
+        lock (FileAccessLock)
+        {
         if (!File.Exists(path)) return default;
         using var input = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete);
         using var bytes = new MemoryStream();
@@ -97,6 +106,7 @@ public sealed class SecureStore
         byte[] clear = Dpapi.Unprotect(bytes.ToArray());
         try { return JsonSerializer.Deserialize<T>(clear, JsonOptions); }
         finally { Array.Clear(clear, 0, clear.Length); }
+        }
     }
 
     private static void SaveProtected<T>(string path, T value)
