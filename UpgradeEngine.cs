@@ -63,6 +63,7 @@ public sealed class UpgradeEngine(SecureStore store, AppSettings settings)
             int maximumAttempts = options.FailureBehavior is FailureBehavior.RetryThenSkip or FailureBehavior.RetryThenStop
                 ? Math.Max(1, options.RetryCount + 1)
                 : 1;
+            var httpRecovery = new RouterUpdateRecovery();
             Exception? failure = null;
             bool completed = false;
             string outcome = "Failed";
@@ -76,7 +77,7 @@ public sealed class UpgradeEngine(SecureStore store, AppSettings settings)
                     Report(router, "Preflight", attempt, 5, "Running", "Checking API, identity, version and free storage");
                     RouterHealthCheck health = await PreflightAsync(router, cancellationToken);
                     if (!health.Passed) throw new InvalidOperationException(health.Summary);
-                    bool changed = await RunRouterAsync(router, attempt, cancellationToken);
+                    bool changed = await RunRouterAsync(router, attempt, httpRecovery, cancellationToken);
                     outcome = changed ? "Upgraded successfully" : "Already current; verified";
                     failure = null;
                     router.LastStatus = "Completed";
@@ -165,7 +166,7 @@ public sealed class UpgradeEngine(SecureStore store, AppSettings settings)
         }
     }
 
-    private async Task<bool> RunRouterAsync(RouterRecord router, int attempt, CancellationToken ct)
+    private async Task<bool> RunRouterAsync(RouterRecord router, int attempt, RouterUpdateRecovery httpRecovery, CancellationToken ct)
     {
         bool changed = false;
         Log(router, "START", "Safe upgrade started");
@@ -193,25 +194,27 @@ public sealed class UpgradeEngine(SecureStore store, AppSettings settings)
             const int maximumPackagePasses = 4;
             for (int pass = 1; pass <= maximumPackagePasses; pass++)
             {
-                await api.ExecuteAsync("/system/package/update/set", ct, $"channel={RouterChannels.Resolve(router, _settings)}");
-                await api.ExecuteAsync("/system/package/update/check-for-updates", ct);
-                IReadOnlyDictionary<string, string> update = await ReadOneAsync(api, "/system/package/update/print", ct);
-                string current = update.GetValueOrDefault("installed-version") ?? (await GetSnapshotAsync(api, ct)).RouterOsVersion;
-                string latest = update.GetValueOrDefault("latest-version") ?? "";
-                Log(router, "PACKAGE", $"Pass={pass}; installed={current}; latest={latest}; status={update.GetValueOrDefault("status") ?? "unknown"}");
-                Report(router, "RouterOS check", attempt, 35 + (pass * 5), "Running", $"Installed {current}; latest {latest}");
-                string updateStatus = update.GetValueOrDefault("status") ?? "";
-                if (string.IsNullOrWhiteSpace(latest))
-                {
-                    if (updateStatus.Contains("up to date", StringComparison.OrdinalIgnoreCase)) break;
-                    throw new InvalidOperationException("RouterOS update check did not return a latest version: " + updateStatus);
-                }
-                if (VersionMatches(current, latest)) break;
-
-                Log(router, "PACKAGE", "Installing RouterOS update; disconnect/reboot expected");
-                Report(router, "RouterOS upgrade", attempt, 55, "Running", $"Installing {latest}; reboot expected");
+                var prepared = await httpRecovery.RunAsync(async () => {
+                    var updater = new RouterPackageUpdater(
+                        (command, token, attributes) => api.ExecuteAsync(command, token, attributes),
+                        (stage, detail) => { Log(router, stage, detail); Report(router, stage, attempt, stage == "RouterOS download" ? 50 : 40, "Running", detail); });
+                    return await updater.PrepareAsync(RouterChannels.Resolve(router, _settings), ct);
+                }, () => DiagnoseUpdateDnsAsync(router, ct), async () => {
+                    // Discard the failed command's connection before sending any recovery commands.
+                    await api.DisposeAsync();
+                    api = await RouterOsApiClient.ConnectAsync(router, _settings, ct);
+                    await api.SendExpectedDisconnectAsync("/system/reboot", ct);
+                    await api.DisposeAsync();
+                    api = await WaitForRouterAsync(router, "HTTP recovery", attempt, 40, ct);
+                    var health = await PreflightAsync(router, ct);
+                    if (!health.Passed) throw new InvalidOperationException("Post-recovery preflight failed: " + health.Summary);
+                }, (stage, detail) => { Log(router, stage, detail); Report(router, stage, attempt, 40, "Running", detail); }, ct);
+                if (!prepared.RequiresReboot) break;
+                string latest = prepared.Version;
+                Log(router, "PACKAGE", "Download confirmed; rebooting to install RouterOS " + latest);
+                Report(router, "RouterOS upgrade", attempt, 55, "Running", $"Downloaded {latest}; rebooting to install");
                 changed = true;
-                await api.SendExpectedDisconnectAsync("/system/package/update/install", ct);
+                await api.SendExpectedDisconnectAsync("/system/reboot", ct);
                 await api.DisposeAsync();
                 api = await WaitForRouterAsync(router, "RouterOS", attempt, 65, ct);
                 RouterSnapshot afterPackage = await GetSnapshotAsync(api, ct);
@@ -259,6 +262,24 @@ public sealed class UpgradeEngine(SecureStore store, AppSettings settings)
         finally { await api.DisposeAsync(); }
         Log(router, "DONE", "Upgrade and verification completed");
         return changed;
+    }
+
+    private async Task<RouterDnsResult> DiagnoseUpdateDnsAsync(RouterRecord router, CancellationToken ct)
+    {
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeout.CancelAfter(TimeSpan.FromSeconds(30));
+        try
+        {
+            // A dedicated connection also prevents a timed-out probe from leaving unread API replies.
+            await using var diagnostic = await RouterOsApiClient.ConnectAsync(router, _settings, timeout.Token);
+            var replies = await diagnostic.ExecuteAsync("/ping", timeout.Token,
+                "address=" + RouterUpdateRecovery.UpdateHost, "count=1");
+            return RouterUpdateRecovery.FromPing(replies);
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        { return new(RouterDnsState.Unverified, "Router DNS probe timed out after 30 seconds; resolution is unverified"); }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        { return RouterUpdateRecovery.FromError(ex.Message); }
     }
 
     private async Task<RouterOsApiClient> WaitForRouterAsync(

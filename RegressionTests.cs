@@ -31,6 +31,7 @@ internal static class RegressionTests
         Check(ReadingColors.Fiber("-12dBm", null).Tone == ReadingTone.Info, "Unknown optical limits are not healthy");
         await ServiceRegressionTests.RunAsync(Path.Combine(directory, "service"));
         await MonitoringRegressionTests.RunAsync(Path.Combine(directory, "monitoring"));
+        await HttpRecoveryRegressionTests.RunAsync();
         await UpgradeBackupRegressionTests.RunAsync(Path.Combine(directory, "upgrade-backups"));
         await BackupRegressionTests.RunAsync(Path.Combine(directory, "parallel-backups"));
         // Fake device operations exercise dispatch without contacting a router.
@@ -71,7 +72,7 @@ internal static class RegressionTests
         // Construct every tab on the STA entry thread without showing the form or contacting routers.
         // Run form construction on its own STA thread after async dispatcher tests.
         Exception? uiFailure = null;
-        var uiThread = new Thread(() => { try { foreach (float scale in new[] { 1F, 1.25F, 1.5F, 2F }) { using var form = new MainForm(new SecureStore(Path.Combine(directory, "ui-" + scale)), smokeTest: true); form.RenderSmokeViews(scale); Check(form.Text.Contains("0.7.1"), "Dashboard and menus construct on Windows"); } } catch (Exception ex) { uiFailure = ex; } });
+        var uiThread = new Thread(() => { try { foreach (float scale in new[] { 1F, 1.25F, 1.5F, 2F }) { using var form = new MainForm(new SecureStore(Path.Combine(directory, "ui-" + scale)), smokeTest: true); form.RenderSmokeViews(scale); Check(form.Text.Contains("0.7.2"), "Dashboard and menus construct on Windows"); } } catch (Exception ex) { uiFailure = ex; } });
         uiThread.IsBackground = true; uiThread.SetApartmentState(ApartmentState.STA); uiThread.Start();
         Check(uiThread.Join(TimeSpan.FromMinutes(3)), "UI layout checks timed out; see ui-layout-check.log");
         Check(uiFailure is null, "Windows workspace construction: " + uiFailure);
