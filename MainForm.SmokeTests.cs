@@ -108,7 +108,7 @@ public sealed partial class MainForm
         Application.DoEvents(); Capture("backups");
         if (_backupGrid.Bottom > _backupGrid.Parent!.ClientSize.Height || _backupGrid.Height < 100 || _backupCoverage.Height < _backupCoverage.GetPreferredSize(new Size(_backupCoverage.Width, 0)).Height || _backupGrid.Top < _backupCoverage.Bottom)
             throw new Exception("Backup summary overlaps table at " + scale);
-        using (var dialog = BuildUpgradeScheduleDialog(out _, out var date, out _, out _, out _))
+        using (var dialog = BuildUpgradeScheduleDialog(out _, out var date, out _, out _, out _, out _))
         {
             dialog.Show(this); Application.DoEvents(); ApplyLayoutTestScale(dialog, scale); Application.DoEvents();
             var button = (Button)dialog.AcceptButton!;

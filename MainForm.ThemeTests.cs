@@ -21,7 +21,7 @@ public sealed partial class MainForm
         capture("dark-devices");
         _tabs.SelectedTab = _dashboardPage; capture("dark-dashboard");
         _tabs.SelectedTab = _tabs.TabPages.Cast<TabPage>().Single(p => p.Text == "Settings"); capture("dark-settings");
-        using (var dialog = BuildUpgradeScheduleDialog(out _, out var date, out _, out _, out _))
+        using (var dialog = BuildUpgradeScheduleDialog(out _, out var date, out _, out _, out _, out _))
         {
             dialog.Show(this); Application.DoEvents(); ApplyLayoutTestScale(dialog, 1.5F); Application.DoEvents();
             if (dialog.BackColor != AppTheme.Background || date.BackColor != AppTheme.Surface)

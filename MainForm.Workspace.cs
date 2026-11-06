@@ -104,7 +104,7 @@ public sealed partial class MainForm
         void Highlight() { foreach (var item in _navigationButtons) item.Button.BackColor = item.Page == _tabs.SelectedTab ? Color.FromArgb(45, 99, 170) : side.BackColor; }
         _tabs.SelectedIndexChanged += (_, _) => Highlight(); Highlight();
         scroll.Controls.Add(list); side.Controls.Add(scroll); side.Controls.Add(_navigationBrand); side.Controls.Add(_navigationToggle);
-        _navigationFooter = new Label { Text = "Made for MikroTik\nv0.7.4 • Open source", Dock = DockStyle.Bottom, AutoSize = true, ForeColor = Color.LightSteelBlue, Padding = new Padding(4, 8, 0, 0) };
+        _navigationFooter = new Label { Text = "Made for MikroTik\nv0.7.5 • Open source", Dock = DockStyle.Bottom, AutoSize = true, ForeColor = Color.LightSteelBlue, Padding = new Padding(4, 8, 0, 0) };
         side.Controls.Add(_navigationFooter);
         SetNavigationCollapsed(_store.LoadSettings().NavigationCollapsed, false);
         return side;

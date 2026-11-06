@@ -64,6 +64,7 @@ public sealed class UpgradeJob
     public string TypeLabel => Kind == ScheduledJobKind.Backup ? "Backup only" : "Backup + upgrade";
     public int EffectiveMaxConcurrency => Kind == ScheduledJobKind.Backup ? 0 : MaxConcurrency;
     public int FailureLimit { get; set; }
+    public bool RestartBeforeUpgrade { get; set; }
 }
 
 public enum ScheduledJobKind { Upgrade, Backup }
@@ -92,6 +93,9 @@ public sealed class AppSettings
 {
     public string Theme { get; set; } = "Dark";
     public bool NavigationCollapsed { get; set; }
+    public int DeviceDetailsWidth { get; set; }
+    public int DeviceDetailsHeight { get; set; }
+    public bool DeviceDetailsMaximized { get; set; }
     public int DefaultApiPort { get; set; } = 8728;
     public bool UseApiSsl { get; set; }
     public bool AllowInvalidTlsCertificate { get; set; }
@@ -124,7 +128,7 @@ public sealed record RouterHealthCheck(
     DateTime CheckedAt);
 
 public sealed record UpgradeRunOptions(FailureBehavior FailureBehavior, int RetryCount,
-    DateTime? WindowEnd = null, bool CanaryPerGroup = false, int MaxConcurrency = 1, int FailureLimit = 0);
+    DateTime? WindowEnd = null, bool CanaryPerGroup = false, int MaxConcurrency = 1, int FailureLimit = 0, bool RestartBeforeUpgrade = false);
 public sealed record BackupHistoryEntry(DateTime CreatedAt, string BackupPath, string ExportPath,
     string BackupHash, string ExportHash, string Verification);
 public sealed record RouterRunResult(

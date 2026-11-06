@@ -6,6 +6,7 @@ internal static class RegressionTests
 {
     public static async Task RunAsync()
     {
+        await PreUpgradeRestartTests.RunAsync();
         string directory = Path.Combine(Path.GetTempPath(), "MikroTikManager-tests-" + Guid.NewGuid().ToString("N"));
         var store = new SecureStore(directory);
         static void Check(bool value, string message) { if (!value) throw new Exception(message); }
@@ -87,7 +88,7 @@ internal static class RegressionTests
                     {
                         using var form = new MainForm(new SecureStore(Path.Combine(directory, "ui-" + scale)), smokeTest: true);
                         form.RenderSmokeViews(scale);
-                        Check(form.Text.Contains("0.7.4"), "Dashboard and menus construct on Windows");
+                        Check(form.Text.Contains("0.7.5"), "Dashboard and menus construct on Windows");
                     }
                 }
                 catch (Exception ex) { uiFailure = ex; }

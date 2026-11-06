@@ -2,6 +2,7 @@ namespace MikroTikManager;
 
 public sealed partial class MainForm
 {
+    private bool _scheduleRestartBeforeUpgrade;
     [System.Runtime.InteropServices.DllImport("user32.dll")]
     [return: System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)]
     private static extern bool IsWindowEnabled(IntPtr handle);
@@ -81,7 +82,7 @@ public sealed partial class MainForm
             {
             var engine = CreateEngine(); _activeUpgrade = engine;
             var result = await Task.Run(() => engine.RunSequentialAsync(selected,
-                new UpgradeRunOptions(job.FailureBehavior, job.RetryCount, manualRun ? null : job.WindowEnd, MaxConcurrency: job.MaxConcurrency, FailureLimit: job.FailureLimit), _running.Token));
+                new UpgradeRunOptions(job.FailureBehavior, job.RetryCount, manualRun ? null : job.WindowEnd, MaxConcurrency: job.MaxConcurrency, FailureLimit: job.FailureLimit, RestartBeforeUpgrade: job.RestartBeforeUpgrade), _running.Token));
             await new MaintenanceReportService(_store).WriteAsync(result);
             job.State = result.Failed == 0 && result.Routers.Count == selected.Count ? "Completed"
                 : $"Finished: {result.Failed} failed; {selected.Count - result.Routers.Count} not processed";
