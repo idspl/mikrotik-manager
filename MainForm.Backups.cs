@@ -22,6 +22,13 @@ public sealed partial class MainForm
             await BackupRoutersAsync(failed);
         });
         actions.DropDownItems.Add("Open Backup Folder", null, (_, _) => OpenSelectedBackupFolder());
+        actions.DropDownItems.Add("Open Pre-upgrade Backups", null, (_, _) => {
+            try {
+                string folder = UpgradeBackupService.RootFolder(_store);
+                Directory.CreateDirectory(folder);
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("explorer.exe", folder) { UseShellExecute = true });
+            } catch (Exception ex) { ShowError(ex); }
+        });
         actions.DropDownItems.Add("Compare Exports", null, CompareBackups);
         actions.DropDownItems.Add("Backup History", null, (_, _) => {
             var selected = SelectedBackupRouters();
