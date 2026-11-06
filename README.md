@@ -1,3 +1,7 @@
+## v0.7.4 — Keep menus unobstructed
+
+- Disable toolbar and menu-item tooltip popups across all pages, nested menus and context menus in both themes. Menu titles no longer float over the next option when a dropdown is open. Icon-only sidebar tooltips remain available.
+
 ## v0.7.3 — Consistent menus and easier navigation
 
 - Every page now has the same compact title/action toolbar with an overflow menu when width is limited. Maintenance uses Queue and History menus; Schedules uses Create and Manage. Backup and Health actions use the same toolbar sizing. The dashboard's oversized action buttons are replaced by a compact toolbar.

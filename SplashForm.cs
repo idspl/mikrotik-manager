@@ -21,7 +21,7 @@ public sealed class SplashForm : Form
         layout.Controls.Add(Line("One Partner. Every Possibility.", 11, Color.LightSteelBlue), 0, 1);
         layout.Controls.Add(Line("MikroTik Manager", 20, Color.White), 0, 2);
         layout.Controls.Add(new Panel(), 0, 3);
-        layout.Controls.Add(Line("Version 0.7.3", 10, Color.LightSteelBlue), 0, 4);
+        layout.Controls.Add(Line("Version 0.7.4", 10, Color.LightSteelBlue), 0, 4);
         layout.Controls.Add(Line("MikroTik is a trademark of MikroTikls SIA. Independent Indigo project.", 8, Color.LightSteelBlue), 0, 5);
         Controls.Add(layout);
         Controls.Add(new Panel { Dock = DockStyle.Bottom, Height = 4, BackColor = Color.FromArgb(54, 155, 242) });
