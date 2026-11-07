@@ -51,6 +51,7 @@ internal sealed class ServiceActivity : IDisposable
         {
             var row = _state.Devices.FirstOrDefault(r => r.RouterId == update.RouterId);
             if (row is null) return;
+            if (_state.State == "Starting") _state = _state with { State = "Running" };
             row.Stage = update.Stage; row.Result = update.Result; row.Progress = update.Progress; row.Attempt = update.Attempt; row.Message = update.Message;
             Publish();
         }
