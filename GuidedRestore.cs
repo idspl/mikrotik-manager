@@ -75,7 +75,7 @@ public sealed partial class MainForm
             _status.Text = "Sending restore request — do not repeat";
             AppendLog($"Restore requested: {router.Name}; recovery {backup.CreatedAt:O}");
             restoreRequested = true;
-            await api.SendExpectedDisconnectAsync("/system/backup/load", _running.Token, "name=" + remoteName, "password=" + restorePassword);
+            await api.SendExpectedDisconnectAsync("/system/backup/load", _running.Token, "name=" + remoteName[..^7], "password=" + restorePassword);
             router.ApiStatus = "Not checked"; router.LastStatus = "Restore requested — verify manually";
             MessageBox.Show(this, "Restore request sent. A disconnect is expected; completion is not verified. Reconnect using the restored configuration and verify the router before any further maintenance.");
         }

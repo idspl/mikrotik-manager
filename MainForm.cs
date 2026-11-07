@@ -1000,7 +1000,7 @@ public sealed partial class MainForm : Form
             _activeUpgrade = engine;
             engine.ConfirmGroupAsync = ConfirmGroupContinuationAsync;
             MaintenanceRunResult result = await Task.Run(
-                () => engine.RunSequentialAsync(selected, new UpgradeRunOptions(behavior, retries, _upgradeWindowEnd, _canaryPerGroup, _batchConcurrency, _batchFailureLimit, _restartBeforeUpgrade, _chosenProfile?.StabilitySeconds, _chosenProfile?.Channel ?? "", completedPrerequisites), token), token);
+                () => engine.RunSequentialAsync(selected, new UpgradeRunOptions(behavior, retries, _upgradeWindowEnd, _canaryPerGroup, _batchConcurrency, _batchFailureLimit, _restartBeforeUpgrade, _chosenProfile?.StabilitySeconds, _chosenProfile?.Channel ?? "", completedPrerequisites, preserveProgress ? _lastUpgradeRouterIds : null), token), token);
             FlushUiUpdates();
             MaintenanceReportFiles reports = await new MaintenanceReportService(_store).WriteAsync(result, token);
             string outcome = engine.PauseRequested && result.Routers.Count < selected.Count ? "Paused after active devices" : "Maintenance finished";
@@ -1031,6 +1031,7 @@ public sealed partial class MainForm : Form
         HashSet<Guid> ids = _progressRows.Where(x => x.Result == "Failed" && _lastUpgradeRouterIds.Contains(x.RouterId)).Select(x => x.RouterId).ToHashSet();
         List<RouterRecord> routers = _routers.Where(x => ids.Contains(x.Id)).ToList();
         if (routers.Count == 0) { MessageBox.Show("There are no failed upgrades to retry. To retry a backup, select its routers and use Backup Selected Routers."); return; }
+        var completed = _progressRows.Where(r => r.Result == "Completed").Select(r => r.RouterId).ToHashSet();
         await RunUpgradeAsync(routers, (FailureBehavior)(_failureBehavior.SelectedItem ?? FailureBehavior.RetryThenSkip), (int)_retryCount.Value, preserveProgress: true, completedPrerequisites: completed);
     }
 

@@ -26,6 +26,12 @@ public sealed partial class MainForm
         _healthGrid.Dock = DockStyle.Fill; _healthGrid.ReadOnly = true; _healthGrid.AllowUserToAddRows = false;
         _healthGrid.SelectionMode = DataGridViewSelectionMode.FullRowSelect; _healthGrid.MultiSelect = true;
         _healthGrid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill; StyleGrid(_healthGrid);
+        _healthGrid.CellFormatting += (_, e) => {
+            if (e.RowIndex < 0 || _healthGrid.Columns[e.ColumnIndex].Name != "Thresholds") return;
+            if (_healthGrid.Rows[e.RowIndex].DataBoundItem is HealthRow r && r.Thresholds.StartsWith("High")) {
+                e.CellStyle.BackColor = Color.FromArgb(95, 69, 24); e.CellStyle.ForeColor = Color.FromArgb(255, 213, 122);
+            }
+        };
         page.Controls.Add(_healthGrid); page.Controls.Add(_healthSummary); page.Controls.Add(actions);
         page.SizeChanged += (_, _) => _healthSummary.MaximumSize = new Size(Math.Max(100, page.ClientSize.Width), 0);
         _tabs.SelectedIndexChanged += (_, _) => { if (_tabs.SelectedTab == page) RefreshHealthView(); };
@@ -52,6 +58,7 @@ public sealed partial class MainForm
         int completed = 0;
         try
         {
+            await Task.Run(() => { foreach (var r in routers) r.HealthHistory = _store.LoadHealthSamples(r.Id); });
             await HealthMonitor.PollAsync(routers, _store.LoadSettings(), () => {
                 _status.Text = $"Health: {++completed} / {routers.Count} checked"; RequestInventoryPaint();
             }, _running.Token);
@@ -61,7 +68,7 @@ public sealed partial class MainForm
         finally
         {
             _lastHealthPoll = DateTime.Now;
-            try { SaveRouters(); } catch (Exception ex) { ShowError(ex); }
+            try { await Task.Run(() => { foreach (var r in routers) _store.SaveHealthSamples(r); }); SaveRouters(); } catch (Exception ex) { ShowError(ex); }
             RefreshHealthView(); RefreshDashboard(); RequestInventoryPaint();
             _running.Dispose(); _running = null; _healthRefreshing = false; SetBusy(false, $"Health refresh finished: {completed} / {routers.Count}");
         }

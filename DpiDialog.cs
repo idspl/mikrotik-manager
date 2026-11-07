@@ -9,6 +9,18 @@ public class DpiDialog : Form
         AutoScaleMode = AutoScaleMode.None;
         Font = new Font("Segoe UI", 9F);
         Icon = AppIcon.Current;
+        Shown += (_, _) => FitToMonitor();
+        DpiChanged += (_, _) => { if (IsHandleCreated) BeginInvoke((Action)FitToMonitor); };
+    }
+
+    private void FitToMonitor()
+    {
+        if (IsDisposed || WindowState != FormWindowState.Normal) return;
+        var area = Screen.FromControl(this).WorkingArea;
+        int width = Math.Max(1, area.Width - 24), height = Math.Max(1, area.Height - 24);
+        MinimumSize = new Size(Math.Min(MinimumSize.Width, width), Math.Min(MinimumSize.Height, height));
+        Size = new Size(Math.Min(Width, width), Math.Min(Height, height));
+        Location = new Point(Math.Clamp(Left, area.Left, Math.Max(area.Left, area.Right - Width)), Math.Clamp(Top, area.Top, Math.Max(area.Top, area.Bottom - Height)));
     }
 
     protected override void OnLoad(EventArgs e)

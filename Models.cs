@@ -6,7 +6,9 @@ public sealed class RouterRecord
     public string Name { get; set; } = "";
     public string Group { get; set; } = "";
     public List<Guid> UpgradeAfter { get; set; } = [];
+    [System.Text.Json.Serialization.JsonIgnore]
     public List<DeviceHealth> HealthHistory { get; set; } = [];
+    [System.Text.Json.Serialization.JsonIgnore]
     public List<OpticalSample> OpticalHistory { get; set; } = [];
     public string OffsiteStatus { get; set; } = "Not copied";
     public string Site { get; set; } = "";
@@ -143,7 +145,7 @@ public sealed record RouterHealthCheck(
     DateTime CheckedAt);
 
 public sealed record UpgradeRunOptions(FailureBehavior FailureBehavior, int RetryCount,
-    DateTime? WindowEnd = null, bool CanaryPerGroup = false, int MaxConcurrency = 1, int FailureLimit = 0, bool RestartBeforeUpgrade = false, int? StabilitySeconds = null, string ChannelOverride = "", IReadOnlySet<Guid>? CompletedPrerequisites = null);
+    DateTime? WindowEnd = null, bool CanaryPerGroup = false, int MaxConcurrency = 1, int FailureLimit = 0, bool RestartBeforeUpgrade = false, int? StabilitySeconds = null, string ChannelOverride = "", IReadOnlySet<Guid>? CompletedPrerequisites = null, IReadOnlyList<Guid>? OriginalQueue = null);
 public sealed record BackupHistoryEntry(DateTime CreatedAt, string BackupPath, string ExportPath,
     string BackupHash, string ExportHash, string Verification)
 {

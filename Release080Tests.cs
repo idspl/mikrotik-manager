@@ -13,6 +13,8 @@ internal static class Release080Tests
         var running = BatchUpgradeQueue.RunAsync([b, a, c], 3, 0, () => false, r => { order.Add(r.Id); return r == a ? gate.Task : Task.FromResult(Result(r)); }, CancellationToken.None);
         await Task.Delay(30); Check(!order.Contains(b.Id) && order.Contains(c.Id), "Prerequisites prevent concurrent upstream work but allow independent devices");
         gate.SetResult(Result(a)); await running; Check(order.IndexOf(b.Id) > order.IndexOf(a.Id), "Dependent starts after prerequisite completion");
+        var resumed = await BatchUpgradeQueue.RunAsync([b], 2, 0, () => false, r => Task.FromResult(Result(r)), CancellationToken.None, new HashSet<Guid> { a.Id });
+        Check(resumed.Count == 1, "Resume accepts completed prerequisites without rerunning them");
         order.Clear();
         var failed = await BatchUpgradeQueue.RunAsync([b, a, c], 3, 0, () => false, r => { order.Add(r.Id); return Task.FromResult(Result(r, r == a ? "Failed" : "Completed")); }, CancellationToken.None);
         Check(!order.Contains(b.Id) && failed.Count == 2, "Failed prerequisite blocks dependent even under skip policy");
@@ -51,6 +53,7 @@ internal static class Release080Tests
             HealthHistory.Record(router, settings); HealthHistory.Record(router, settings);
             Check(router.HealthHistory.Count == 1 && HealthHistory.Warnings(router.Health, settings).Contains("High temperature"), "History deduplicates samples and evaluates thresholds");
             var store = new SecureStore(Path.Combine(root, "store")); settings.MaintenanceProfiles.Add(new() { Name = "Production", RestartBeforeUpgrade = true });
+            store.SaveHealthSamples(router); router.HealthHistory.Clear(); router.HealthHistory = store.LoadHealthSamples(router.Id); Check(router.HealthHistory.Count == 1, "Encrypted time series survive separately from inventory");
             store.SaveSettings(settings); Check(store.LoadSettings().MaintenanceProfiles[0].RestartBeforeUpgrade, "Profiles survive save/load");
             using (var activity = new ServiceActivity(store, "fixture", [router]))
             { activity.Update(new(router.Id, "Backup", 1, 20, "Running", "fixture")); Check(ServiceActivity.Read(store)?.Devices.Single().Progress == 20, "Service progress published"); activity.Finish("Completed"); }

@@ -142,7 +142,7 @@ public sealed partial class MainForm
         try
         {
             var rows = new System.Data.DataTable();
-            foreach (string column in new[] { "Order", "Router", "Group", "Address", "Channel", "RouterOS", "Firmware", "Available firmware", "Ready", "Storage", "Detail" })
+            foreach (string column in new[] { "Order", "Router", "Group", "Address", "Channel", "RouterOS", "Firmware", "Available firmware", "Ready", "Storage", "Upgrade after", "Detail" })
                 rows.Columns.Add(column);
             var engine = new UpgradeEngine(_store, _store.LoadSettings());
             using var slots = new SemaphoreSlim(8);
@@ -157,9 +157,9 @@ public sealed partial class MainForm
                 var router = health.Router;
                 rows.Rows.Add(++order, router.Name, router.Group, router.Host, RouterChannels.Resolve(router, _store.LoadSettings()),
                     health.Snapshot?.RouterOsVersion ?? "Unknown", health.Snapshot?.CurrentFirmware ?? "Unknown",
-                    health.Snapshot?.UpgradeFirmware ?? "Not applicable", health.Passed, router.StorageStatus, health.Summary);
+                    health.Snapshot?.UpgradeFirmware ?? "Not applicable", health.Passed, router.StorageStatus, string.Join(", ", router.UpgradeAfter.Select(id => _routers.FirstOrDefault(r => r.Id == id)?.Name ?? "Missing device")), health.Summary);
             }
-            using var dialog = new DpiDialog { Text = "Upgrade Preview — confirm exact queue order", Width = 1100, Height = 550, StartPosition = FormStartPosition.CenterParent };
+            using var dialog = new DpiDialog { Text = "Upgrade Preview — review devices and execution settings", Width = 1100, Height = 550, StartPosition = FormStartPosition.CenterParent };
             var info = new Label { Dock = DockStyle.Top, Height = 100, Padding = new Padding(10), Text =
                 $"Channels: see each router row | Failure policy: {FriendlyBehavior(behavior)} | Retries: {retries}\n" +
                 "RouterOS target is resolved by the router at execution time; it is not pinned by this preview.\n" +
@@ -180,7 +180,11 @@ public sealed partial class MainForm
             controls.AutoSize = true; controls.AutoSizeMode = AutoSizeMode.GrowAndShrink;
             profiles.SelectedIndexChanged += (_, _) => {
                 _chosenProfile = profiles.SelectedItem as MaintenanceProfile;
+                for (int i = 0; i < selected.Count; i++) rows.Rows[i]["Channel"] = selected[i].UpdateChannel.Length > 0 ? selected[i].UpdateChannel : _chosenProfile?.Channel.Length > 0 ? _chosenProfile.Channel : _store.LoadSettings().UpdateChannel;
                 if (_chosenProfile is not { } p) return;
+                info.Text = $"Profile: {p.Name} | Failure policy: {FriendlyBehavior(p.FailureBehavior)} | Retries: {p.RetryCount} | Stability: {p.StabilitySeconds}s\n" +
+                    "Per-device channels take precedence. Local backups must verify before upgrading. Configured prerequisites run first; their dependents require successful completion.";
+                SizeUpgradeNotice();
                 concurrent.Value = p.MaxConcurrency; failures.Value = p.FailureLimit; restart.Checked = p.RestartBeforeUpgrade;
                 _failureBehavior.SelectedItem = p.FailureBehavior; _retryCount.Value = p.RetryCount;
             };

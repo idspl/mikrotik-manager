@@ -35,7 +35,7 @@ public sealed class UpgradeEngine(SecureStore store, AppSettings settings)
             _settings.UpdateChannel = options.ChannelOverride;
         }
         var results = new List<RouterRunResult>();
-        _history = new MaintenanceHistory { RouterIds = queue.Select(r => r.Id).Concat(options.CompletedPrerequisites ?? new HashSet<Guid>()).Distinct().ToList(), CompletedIds = options.CompletedPrerequisites?.ToList() ?? [], FailureBehavior = options.FailureBehavior, RetryCount = options.RetryCount };
+        _history = new MaintenanceHistory { RouterIds = (options.OriginalQueue ?? queue.Select(r => r.Id).ToList()).Concat(options.CompletedPrerequisites ?? new HashSet<Guid>()).Distinct().ToList(), CompletedIds = options.CompletedPrerequisites?.ToList() ?? [], FailureBehavior = options.FailureBehavior, RetryCount = options.RetryCount };
         _history.Save(_store);
         int limit = options.FailureBehavior is FailureBehavior.Stop or FailureBehavior.RetryThenStop ? 1 : options.FailureLimit;
         bool Stop() => PauseRequested || options.WindowEnd is { } end && DateTime.Now >= end;

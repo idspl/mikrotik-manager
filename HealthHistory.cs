@@ -64,9 +64,13 @@ internal sealed class HistoryPlot : Control
 
 public sealed partial class MainForm
 {
-    private void ShowHealthHistory()
+    private async void ShowHealthHistory()
     {
+        if (_operationInProgress) return;
         if (_healthGrid.CurrentRow?.DataBoundItem is not HealthRow row || _routers.FirstOrDefault(r => r.Id == row.Id) is not RouterRecord router) return;
+        try { await Task.Run(() => { router.HealthHistory = _store.LoadHealthSamples(router.Id); router.OpticalHistory = _store.LoadOpticalSamples(router.Id); }); }
+        catch (Exception ex) { ShowError(ex); return; }
+        if (IsDisposed) return;
         using var dialog = new DpiDialog { Text = "Health history — " + router.Name, Width = 1100, Height = 700, StartPosition = FormStartPosition.CenterParent };
         var selector = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 320 };
         selector.Items.AddRange(["CPU %", "Memory used %", "Temperature °C"]);
