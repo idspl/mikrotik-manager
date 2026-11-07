@@ -104,10 +104,10 @@ public sealed class RouterBackupService(AppSettings settings, int? retentionDays
             try { status = await RecoveryFiles.CopyOffsiteAsync(outputFolder, _settings.OffsiteFolder, cancellationToken); }
             catch (OperationCanceledException) { throw; }
             catch (Exception ex) { copied = false; status = "Offsite copy failed: " + ex.Message; }
-            foreach (var router in routers) { router.OffsiteStatus = status; Log(router, status); }
+            foreach (var router in routers) { router.OffsiteStatus = router.LastBackupError.Length == 0 ? status : "Not copied: local backup failed"; Log(router, router.OffsiteStatus); }
         }
         if (failed == 0 && successful > 0 && copied) await Task.Run(() => CleanupExpiredBackups(parentFolder));
-        return new BulkBackupResult(successful, failed, outputFolder, verified);
+        return new BulkBackupResult(successful, failed, outputFolder, verified, copied ? 0 : successful);
     }
 
     private sealed record BackupIdentity(string Model, string Version, string Serial);

@@ -103,8 +103,8 @@ internal static class Program
             if (job.Kind == ScheduledJobKind.Backup)
             {
                 var backup = await ScheduledBackupRunner.RunAsync(store, store.LoadSettings(), job, selected, null, activity is null ? null : activity.Update, ct);
-                job.State = backup.Failed == 0 ? "Completed" : $"Completed with {backup.Failed} backup failures";
-                backupSummary = job.LastRunResult = $"Backup: {backup.Successful} successful, {backup.Failed} failed; {backup.Folder}";
+                job.State = backup.Failed == 0 && backup.OffsiteFailures == 0 ? "Completed" : $"Completed with {backup.Failed} backup failures and {backup.OffsiteFailures} offsite failures";
+                backupSummary = job.LastRunResult = $"Backup: {backup.Successful} successful, {backup.Failed} failed; {backup.OffsiteFailures} offsite failures; {backup.Folder}";
             }
             else
             {

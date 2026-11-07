@@ -958,7 +958,7 @@ public sealed partial class MainForm : Form
             SaveRouters();
             RequestInventoryPaint();
             MessageBox.Show(
-                $"Bulk backup completed.\n\nSuccessful: {result.Successful}\nVerified: {result.Verified}\nFailed: {result.Failed}\n\nFolder:\n{result.Folder}\n\nThe manifest records file sizes and SHA-256 hashes. The .rsc exports and BackupManifest.csv contain sensitive information.",
+                $"Bulk backup completed.\n\nSuccessful: {result.Successful}\nVerified: {result.Verified}\nFailed: {result.Failed}\nOffsite copy failures: {result.OffsiteFailures}\n\nFolder:\n{result.Folder}\n\nThe manifest records file sizes and SHA-256 hashes. The .rsc exports and BackupManifest.csv contain sensitive information.",
                 Text, MessageBoxButtons.OK, result.Failed == 0 ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
             try { Process.Start(new ProcessStartInfo("explorer.exe", $"\"{result.Folder}\"") { UseShellExecute = true }); } catch { }
         }

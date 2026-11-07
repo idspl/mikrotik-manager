@@ -61,6 +61,13 @@ internal static class AppTheme
             button.FlatAppearance.BorderColor = Border;
             button.FlatAppearance.MouseOverBackColor = Selection;
         }
+        if (root is PropertyGrid properties)
+        {
+            properties.ViewBackColor = Surface; properties.ViewForeColor = Text;
+            properties.HelpBackColor = Background; properties.HelpForeColor = Text;
+            properties.CategoryForeColor = Text; properties.LineColor = Border;
+            properties.CommandsBackColor = Surface; properties.CommandsForeColor = Text;
+        }
         if (root is TabPage page) page.UseVisualStyleBackColor = false;
         if (root is CheckBox check) check.UseVisualStyleBackColor = false;
         if (root is RadioButton radio) radio.UseVisualStyleBackColor = false;
