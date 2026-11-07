@@ -105,7 +105,7 @@ public sealed partial class MainForm
         finally { view.EndUpdate(); }
     }
 
-    private static void StyleGrid(DataGridView grid)
+    internal static void StyleGrid(DataGridView grid)
     {
         grid.RowHeadersVisible = false; grid.BorderStyle = BorderStyle.None; grid.BackgroundColor = Color.White;
         grid.GridColor = Color.FromArgb(225, 229, 235); grid.RowTemplate.Height = 30;

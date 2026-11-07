@@ -90,7 +90,10 @@ internal sealed class ServiceActivityForm : DpiDialog
     {
         Text = "MikroTik Manager — Background maintenance"; Width = 1180; Height = 700; StartPosition = FormStartPosition.CenterScreen;
         var status = new Label { Dock = DockStyle.Top, AutoSize = true, Padding = new Padding(12) };
-        var grid = new DataGridView { Dock = DockStyle.Fill, ReadOnly = true, AllowUserToAddRows = false, AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.DisplayedCells };
+        var grid = new SmoothGrid { Dock = DockStyle.Fill, ReadOnly = true, AllowUserToAddRows = false, AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.DisplayedCells };
+        MainForm.StyleGrid(grid);
+        grid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
+        SizeChanged += (_, _) => status.MaximumSize = new Size(Math.Max(100, ClientSize.Width), 0);
         var bar = new FlowLayoutPanel { Dock = DockStyle.Bottom, AutoSize = true, Padding = new Padding(12) };
         ServiceActivityState? current = null;
         var stop = new Button { Text = "Stop New Starts", AutoSize = true }; var cancel = new Button { Text = "Cancel Job…", AutoSize = true };

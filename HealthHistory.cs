@@ -75,7 +75,8 @@ public sealed partial class MainForm
         var selector = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 320 };
         selector.Items.AddRange(["CPU %", "Memory used %", "Temperature °C"]);
         foreach (string port in router.OpticalHistory.Select(h => h.Port).Distinct().Order()) { selector.Items.Add("RX • " + port); selector.Items.Add("TX • " + port); }
-        var plot = new HistoryPlot(); var grid = new DataGridView { Dock = DockStyle.Fill, ReadOnly = true, AllowUserToAddRows = false, AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.DisplayedCells };
+        var plot = new HistoryPlot(); var grid = new SmoothGrid { Dock = DockStyle.Fill, ReadOnly = true, AllowUserToAddRows = false, AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.DisplayedCells };
+        StyleGrid(grid);
         var split = new SplitContainer { Dock = DockStyle.Fill, Orientation = Orientation.Horizontal }; split.Panel1.Controls.Add(plot); split.Panel2.Controls.Add(grid);
         var bar = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, Padding = new Padding(12) }; bar.Controls.Add(selector);
         bar.Controls.Add(new Label { AutoSize = true, Text = "Health is sampled while open; optics are retained when a port is read. No notifications." });
