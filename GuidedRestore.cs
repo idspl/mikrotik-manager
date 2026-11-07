@@ -58,11 +58,14 @@ public sealed partial class MainForm
         if (typed.Text != router.Name || string.IsNullOrEmpty(password.Text)) { MessageBox.Show("Device name confirmation and backup password are required."); return; }
         var backup = entries[choice.SelectedIndex]; string remoteName = remote.Text.Trim(); string restorePassword = password.Text;
         SetBusy(true, "Verifying restore files and device identity…"); _running = new CancellationTokenSource(TimeSpan.FromMinutes(15));
+        bool restoreRequested = false;
         try
         {
             await using var api = await RouterOsApiClient.ConnectAsync(router, _store.LoadSettings(), _running.Token);
             await GuidedRestore.VerifyRemoteAsync(api, backup, remoteName, _running.Token);
             if (MessageBox.Show(this, $"Verified {router.Name} ({router.Host}), backup {backup.CreatedAt:g}.\n\nCreate a new recovery copy, then replace this router's configuration and reboot?", "Confirm restore", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes) return;
+            if (string.IsNullOrEmpty(router.BackupPassword)) router.BackupPassword = Convert.ToHexString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(18));
+            SaveRouters();
             var safety = new RouterBackupService(_store.LoadSettings(), 0);
             var result = await safety.BackupAllAsync([router], Path.Combine(_store.RootDirectory, "Backups", "BeforeRestore", router.Id.ToString("N")), _running.Token);
             SaveRouters();
@@ -71,11 +74,15 @@ public sealed partial class MainForm
             await GuidedRestore.VerifyRemoteAsync(api, backup, remoteName, _running.Token);
             _status.Text = "Sending restore request — do not repeat";
             AppendLog($"Restore requested: {router.Name}; recovery {backup.CreatedAt:O}");
+            restoreRequested = true;
             await api.SendExpectedDisconnectAsync("/system/backup/load", _running.Token, "name=" + remoteName, "password=" + restorePassword);
             router.ApiStatus = "Not checked"; router.LastStatus = "Restore requested — verify manually";
             MessageBox.Show(this, "Restore request sent. A disconnect is expected; completion is not verified. Reconnect using the restored configuration and verify the router before any further maintenance.");
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) {
+            if (restoreRequested) { router.LastStatus = "Restore outcome uncertain — verify manually"; MessageBox.Show(this, "Restore outcome is uncertain. Do not repeat the request until you have checked the router. " + ex.Message); }
+            else ShowError(ex);
+        }
         finally { SaveRouters(); _running.Dispose(); _running = null; SetBusy(false, "Ready"); }
     }
 }

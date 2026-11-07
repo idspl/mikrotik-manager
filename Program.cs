@@ -93,7 +93,7 @@ internal static class Program
         var selected = job.RouterIds.Select(id => routers.FirstOrDefault(x => x.Id == id)).Where(x => x is not null).Cast<RouterRecord>().ToList();
         using var controlled = CancellationTokenSource.CreateLinkedTokenSource(ct);
         ct = controlled.Token;
-        using var activity = suppliedStore is null ? null : new ServiceActivity(store, job.Name, selected);
+        using var activity = suppliedStore is null ? null : new ServiceActivity(store, job.Name, selected, job.Kind == ScheduledJobKind.Upgrade);
         if (activity is not null) activity.Cancel = controlled.Cancel;
         try
         {

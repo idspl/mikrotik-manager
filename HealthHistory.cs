@@ -18,7 +18,7 @@ internal static class HealthHistory
         if (router.Health is not { } sample) return;
         router.HealthHistory.RemoveAll(h => h.CheckedAt < DateTime.Now.AddDays(-Math.Clamp(settings.HealthHistoryDays, 1, 90)));
         if (router.HealthHistory.LastOrDefault()?.CheckedAt != sample.CheckedAt) router.HealthHistory.Add(sample);
-        if (router.HealthHistory.Count > 10000) router.HealthHistory.RemoveRange(0, router.HealthHistory.Count - 10000);
+        if (router.HealthHistory.Count > 2016) router.HealthHistory.RemoveRange(0, router.HealthHistory.Count - 2016);
     }
     internal static string Warnings(DeviceHealth? h, AppSettings s)
     {

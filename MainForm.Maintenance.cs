@@ -12,7 +12,7 @@ public sealed partial class MainForm
     {
         var rows = progress.ToList();
         if (!rows.Any(x => x.Result == "Failed")) return [];
-        var pending = rows.Where(x => x.Result == "Pending" && x.Stage == "Queued" && x.Attempt == 0)
+        var pending = rows.Where(x => x.Result == "Pending" && (x.Stage == "Queued" || x.Stage == "Not started") && x.Attempt == 0)
             .Select(x => x.RouterId).ToHashSet();
         return queue.Where(pending.Contains).Distinct().ToList();
     }
@@ -31,7 +31,12 @@ public sealed partial class MainForm
         if (routers.Count == 0) { MessageBox.Show("No unstarted routers remain after the failed routers."); return; }
         // RunUpgradeAsync presents readiness, queue order, and cutoff/group controls
         // before starting. Failed, completed and interrupted routers are excluded.
-        await RunUpgradeAsync(routers, FailureBehavior.Skip, 0, preserveProgress: true);
+        var completed = _progressRows.Where(r => r.Result == "Completed").Select(r => r.RouterId).ToHashSet();
+        // Exclude dependents of failed/unselected prerequisites, including transitive chains.
+        bool removed;
+        do { var allowed = routers.Select(r => r.Id).Concat(completed).ToHashSet(); removed = routers.RemoveAll(r => r.UpgradeAfter.Any(id => !allowed.Contains(id))) > 0; } while (removed);
+        if (routers.Count == 0) { MessageBox.Show("All remaining devices depend on incomplete prerequisites. Retry those prerequisites first."); return; }
+        await RunUpgradeAsync(routers, FailureBehavior.Skip, 0, preserveProgress: true, completedPrerequisites: completed);
     }
 
     private void PauseAfterRouter(object? sender, EventArgs e)
@@ -118,7 +123,7 @@ public sealed partial class MainForm
         {
             HistoryStage? stage = run.Stages.LastOrDefault(x => x.RouterId == row.RouterId);
             row.Result = run.CompletedIds.Contains(row.RouterId) ? "Completed" : stage is null ? "Pending"
-                : stage.Result is "Failed" or "Cancelled" ? stage.Result : "Interrupted";
+                : stage.Result is "Failed" or "Cancelled" or "Pending" ? stage.Result : "Interrupted";
             row.Progress = row.Result == "Completed" ? 100 : 0;
             row.Stage = stage?.Stage ?? "Queued";
             row.Message = stage?.Message ?? "Not started";

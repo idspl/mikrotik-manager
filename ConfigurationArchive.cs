@@ -37,11 +37,17 @@ internal static class ConfigurationArchive
             if (bundle.Version is not (1 or 2 or 3) || bundle.Routers is null || bundle.Jobs is null || bundle.Settings is null
                 || bundle.Routers.Any(x => x.ApiPort < 1 || x.ApiPort > 65535 || string.IsNullOrWhiteSpace(x.Host))
                 || bundle.Routers.Select(x => x.Id).Distinct().Count() != bundle.Routers.Count
-                || bundle.Routers.Any(x => x.Id == Guid.Empty || x.Backups is null || x.CriticalInterfaces is null || x.Site is null || x.Tags is null)
+                || bundle.Routers.Any(x => x.Id == Guid.Empty || x.Backups is null || x.CriticalInterfaces is null || x.Site is null || x.Tags is null || x.UpgradeAfter is null || x.HealthHistory is null || x.OpticalHistory is null)
                 || bundle.Routers.Any(x => x.UpdateChannel != "" && !RouterChannels.Allowed.Contains(x.UpdateChannel))
                 || bundle.Jobs.Any(x => x.MaxConcurrency is < 0 or > 10000 || x.FailureLimit is < 0 or > 10000 || !Enum.IsDefined(x.Kind) || !Enum.IsDefined(x.Recurrence) || x.RetentionDays is < 0 or > 3650
                     || x.Kind == ScheduledJobKind.Upgrade && x.Recurrence != BackupRecurrence.Once
                     || x.Kind == ScheduledJobKind.Backup && (string.IsNullOrWhiteSpace(x.BackupFolder) || !Path.IsPathFullyQualified(x.BackupFolder)))
+                || bundle.Settings.MaintenanceProfiles is null
+                || bundle.Settings.MaintenanceProfiles.Any(p => string.IsNullOrWhiteSpace(p.Name) || p.MaxConcurrency is < 0 or > 10000 || p.RetryCount is < 0 or > 5 || p.StabilitySeconds is < 0 or > 300 || p.FailureLimit is < 0 or > 10000 || !Enum.IsDefined(p.FailureBehavior) || p.Channel is null || p.Channel != "" && !RouterChannels.Allowed.Contains(p.Channel))
+                || bundle.Settings.PreUpgradeKeepCopies is < 0 or > 1000 || bundle.Settings.PreUpgradeBudgetMb is < 0 or > 1000000
+                || bundle.Settings.HealthHistoryDays is < 1 or > 90 || bundle.Settings.CpuWarningPercent is < 1 or > 100 || bundle.Settings.MemoryWarningPercent is < 1 or > 100 || bundle.Settings.TemperatureWarningC is < 1 or > 150
+                || bundle.Settings.OffsiteFolder is null || bundle.Settings.OffsiteFolder != "" && !Path.IsPathFullyQualified(bundle.Settings.OffsiteFolder)
+                || bundle.Jobs.Any(j => j.StabilitySeconds is < 0 or > 300 || j.ChannelOverride is null || j.ChannelOverride != "" && !RouterChannels.Allowed.Contains(j.ChannelOverride))
                 || bundle.Settings.Theme is not ("Light" or "Dark")
                 || bundle.Settings.DefaultApiPort is < 1 or > 65535
                 || bundle.Settings.ConnectTimeoutSeconds is < 3 or > 120
@@ -57,6 +63,8 @@ internal static class ConfigurationArchive
                 || bundle.Jobs.Any(x => x.RouterIds is null || x.RetryCount is < 0 or > 5 || !Enum.IsDefined(x.FailureBehavior))
                 || bundle.Jobs.Any(x => x.RouterIds.Any(id => !bundle.Routers.Any(r => r.Id == id))))
                 throw new InvalidDataException("Invalid configuration archive.");
+            try { DependencyPlan.Validate(bundle.Routers); }
+            catch (InvalidOperationException ex) { throw new InvalidDataException("Invalid dependency graph in archive.", ex); }
             return bundle;
         }
         finally { CryptographicOperations.ZeroMemory(key); CryptographicOperations.ZeroMemory(clear); }

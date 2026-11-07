@@ -143,7 +143,7 @@ public sealed record RouterHealthCheck(
     DateTime CheckedAt);
 
 public sealed record UpgradeRunOptions(FailureBehavior FailureBehavior, int RetryCount,
-    DateTime? WindowEnd = null, bool CanaryPerGroup = false, int MaxConcurrency = 1, int FailureLimit = 0, bool RestartBeforeUpgrade = false, int? StabilitySeconds = null, string ChannelOverride = "");
+    DateTime? WindowEnd = null, bool CanaryPerGroup = false, int MaxConcurrency = 1, int FailureLimit = 0, bool RestartBeforeUpgrade = false, int? StabilitySeconds = null, string ChannelOverride = "", IReadOnlySet<Guid>? CompletedPrerequisites = null);
 public sealed record BackupHistoryEntry(DateTime CreatedAt, string BackupPath, string ExportPath,
     string BackupHash, string ExportHash, string Verification)
 {

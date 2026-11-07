@@ -23,7 +23,7 @@ public sealed partial class MainForm
     }
 
     private static ToolStripButton ToolbarAction(string text, EventHandler handler)
-        => new(text, null, handler) { DisplayStyle = ToolStripItemDisplayStyle.Text, ToolTipText = text };
+        => new(text, ActionIcons.For(text), handler) { DisplayStyle = ToolStripItemDisplayStyle.ImageAndText, ToolTipText = text, TextImageRelation = TextImageRelation.ImageBeforeText };
 
     private static ToolStripDropDownButton ToolbarMenu(string text, params ToolStripItem[] items)
     {

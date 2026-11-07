@@ -2,7 +2,7 @@ using System.Text.Json;
 namespace MikroTikManager;
 
 internal sealed record ServiceActivityState(Guid Session, string Job, DateTime UpdatedUtc, bool Running,
-    string State, List<MaintenanceProgressRow> Devices);
+    string State, List<MaintenanceProgressRow> Devices, bool CanStopNewStarts = true);
 internal sealed record ServiceControlRequest(Guid Session, string Action, DateTime CreatedUtc);
 
 // Installed mode's data directory is restricted to SYSTEM and Administrators.
@@ -17,10 +17,10 @@ internal sealed class ServiceActivity : IDisposable
     internal Action? StopNewStarts { get; set; }
     internal Action? Cancel { get; set; }
     private static string PathFor(SecureStore store) => Path.Combine(store.RootDirectory, "service-activity.json");
-    internal ServiceActivity(SecureStore store, string job, IEnumerable<RouterRecord> routers)
+    internal ServiceActivity(SecureStore store, string job, IEnumerable<RouterRecord> routers, bool canStopNewStarts = true)
     {
         _store = store;
-        _state = new(Guid.NewGuid(), job, DateTime.UtcNow, true, "Starting", routers.Select(r => new MaintenanceProgressRow { RouterId = r.Id, Router = r.Name, Address = r.Host }).ToList());
+        _state = new(Guid.NewGuid(), job, DateTime.UtcNow, true, "Starting", routers.Select(r => new MaintenanceProgressRow { RouterId = r.Id, Router = r.Name, Address = r.Host }).ToList(), canStopNewStarts);
         Publish(); _poll = Task.Run(PollAsync);
     }
     internal static T? Read<T>(string path)
@@ -31,7 +31,7 @@ internal sealed class ServiceActivity : IDisposable
     internal static ServiceActivityState? Read(SecureStore store) => Read<ServiceActivityState>(PathFor(store));
     internal static bool Accept(ServiceControlRequest request, ServiceActivityState state, DateTime now) => state.Running && request.Session == state.Session
         && request.CreatedUtc <= now.AddSeconds(5) && now - request.CreatedUtc <= TimeSpan.FromSeconds(30)
-        && request.Action is "Stop new starts" or "Cancel";
+        && (request.Action == "Cancel" || request.Action == "Stop new starts" && state.CanStopNewStarts);
     internal static void Request(SecureStore store, ServiceActivityState state, string action)
     {
         if (!InstalledMode.IsAdministrator) throw new UnauthorizedAccessException("Administrator access is required.");
@@ -109,7 +109,7 @@ internal sealed class ServiceActivityForm : DpiDialog
             bool fresh = DateTime.UtcNow - state.UpdatedUtc < TimeSpan.FromSeconds(10);
             status.Text = $"{state.Job} • {state.State} • Updated {state.UpdatedUtc.ToLocalTime():T}\n" +
                 (!fresh ? "Connection stale — controls disabled. " : "") + "Close this monitor and reopen the app after the job finishes to edit inventory or schedules.";
-            stop.Enabled = cancel.Enabled = fresh && state.Running;
+            cancel.Enabled = fresh && state.Running; stop.Enabled = cancel.Enabled && state.CanStopNewStarts;
             var selected = grid.SelectedRows.Cast<DataGridViewRow>().Select(r => (r.DataBoundItem as MaintenanceProgressRow)?.RouterId).ToHashSet();
             int first = grid.FirstDisplayedScrollingRowIndex;
             // Avoid replacing row objects when only the heartbeat changed.

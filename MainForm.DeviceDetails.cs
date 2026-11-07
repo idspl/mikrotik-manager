@@ -116,7 +116,7 @@ public sealed partial class MainForm
                     string Value(string key) => values.FirstOrDefault(v => v[0] == key)?[1] ?? "Unavailable";
                     router.OpticalHistory.Add(new(DateTime.Now, port.Name, Value("sfp-rx-power"), Value("sfp-tx-power"), Value("sfp-temperature")));
                     router.OpticalHistory.RemoveAll(h => h.CheckedAt < DateTime.Now.AddDays(-Math.Clamp(_store.LoadSettings().HealthHistoryDays, 1, 90)));
-                    if (router.OpticalHistory.Count > 10000) router.OpticalHistory.RemoveRange(0, router.OpticalHistory.Count - 10000);
+                    if (router.OpticalHistory.Count > 2016) router.OpticalHistory.RemoveRange(0, router.OpticalHistory.Count - 2016);
                     SaveRouters();
                 }
                 if (!dialog.IsDisposed) ReplaceItems(sample, new[] { new[] { "Port / checked", port.Name + " • " + DateTime.Now.ToString("T") } }.Concat(values).ToArray());

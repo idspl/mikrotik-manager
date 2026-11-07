@@ -2,7 +2,7 @@ namespace MikroTikManager;
 
 internal static class DependencyPlan
 {
-    internal static void Validate(IReadOnlyList<RouterRecord> routers)
+    internal static void Validate(IReadOnlyList<RouterRecord> routers, IReadOnlySet<Guid>? completed = null)
     {
         var byId = routers.ToDictionary(r => r.Id);
         var visiting = new HashSet<Guid>(); var visited = new HashSet<Guid>();
@@ -12,6 +12,7 @@ internal static class DependencyPlan
             if (!visiting.Add(id)) throw new InvalidOperationException("Upgrade dependency cycle detected. Review device upgrade order.");
             foreach (var dependency in byId[id].UpgradeAfter.Distinct())
             {
+                if (!byId.ContainsKey(dependency) && completed?.Contains(dependency) == true) continue;
                 if (!byId.ContainsKey(dependency)) throw new InvalidOperationException($"{byId[id].Name}: include every 'Upgrade after' device in this job, or remove the dependency.");
                 Visit(dependency);
             }
