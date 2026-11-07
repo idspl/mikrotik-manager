@@ -43,7 +43,7 @@ public sealed partial class MainForm : Form
         AppTheme.Set(_store.LoadSettings().Theme);
         _defaultReleaseChannel = _store.LoadSettings().UpdateChannel;
         _routerContextMenu = new ContextMenuStrip(_components);
-        Text = "MikroTik Manager 0.7.5";
+        Text = "MikroTik Manager 0.8.0";
         Font = new Font("Segoe UI", 9F);
         Icon = AppIcon.Current;
         Width = 1440;
@@ -168,6 +168,8 @@ public sealed partial class MainForm : Form
 
         var upgradeMenu = new ToolStripDropDownButton("Upgrade");
         upgradeMenu.DropDownItems.Add("Upgrade Selected Routers...", null, RunNow);
+        upgradeMenu.DropDownItems.Add("Configure Upgrade Order…", null, EditDependencies);
+        upgradeMenu.DropDownItems.Add("Saved Maintenance Profiles…", null, EditProfiles);
         var channels = new ToolStripMenuItem("Set Channel for Selected");
         channels.DropDownItems.Add("App default", null, (_, _) => SetSelectedChannel(""));
         foreach (string channel in RouterChannels.Allowed)
@@ -188,8 +190,8 @@ public sealed partial class MainForm : Form
         updatesMenu.DropDownItems.Add("Check for Updates", null, async (_, _) => await CheckForUpdatesAsync(true));
         updatesMenu.DropDownItems.Add("Navigation Shortcuts", null, ShowNavigationHelp);
         updatesMenu.DropDownItems.Add(new ToolStripSeparator());
-        updatesMenu.DropDownItems.Add("About MikroTik Manager 0.7.5", null, (_, _) =>
-            MessageBox.Show("MikroTik Manager 0.7.5\n\nMade for MikroTik\nIndependent open-source software by Indigo Data Services Pvt Ltd.", Text,
+        updatesMenu.DropDownItems.Add("About MikroTik Manager 0.8.0", null, (_, _) =>
+            MessageBox.Show("MikroTik Manager 0.8.0\n\nMade for MikroTik\nIndependent open-source software by Indigo Data Services Pvt Ltd.", Text,
                 MessageBoxButtons.OK, MessageBoxIcon.Information));
         actions.Items.AddRange([inventoryMenu, selectionMenu, groupMenu, maintenanceMenu, upgradeMenu, updatesMenu]);
 
@@ -279,6 +281,7 @@ public sealed partial class MainForm : Form
         _routerGrid.CellDoubleClick += (_, e) => { if (e.RowIndex >= 0) ShowDeviceDetails(this, EventArgs.Empty); };
         _routerContextMenu.Items.Add("Check API Status", null, CheckApiStatusSelected);
         _routerContextMenu.Items.Add("Edit Credentials...", null, EditCredentials);
+        _routerContextMenu.Items.Add("Upgrade After…", null, EditDependencies);
         _routerContextMenu.Items.Add("Pre-Upgrade Check", null, RunPreflightSelected);
         _routerContextMenu.Items.Add("Fetch Current Versions", null, FetchCurrentVersions);
         _routerContextMenu.Items.Add("Edit Router...", null, EditRouter);
@@ -409,6 +412,8 @@ public sealed partial class MainForm : Form
         serviceRow.Controls.Add(serviceStatus);
         serviceRow.Controls.Add(Button("Refresh", (_, _) => serviceStatus.Text = InstalledMode.Status()));
         serviceRow.Controls.Add(Button("Services…", (_, _) => System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("services.msc") { UseShellExecute = true })));
+        AddRow(panel, "Maintenance", Button("Saved Profiles…", EditProfiles));
+        AddRow(panel, "Recovery and monitoring", Button("Storage / History…", ConfigureRecovery));
         AddRow(panel, "Scheduled jobs", serviceRow);
         AddRow(panel, "Appearance (saved immediately)", _themeChoice);
         AddRow(panel, "Default RouterOS API port", apiPort);
@@ -437,6 +442,14 @@ public sealed partial class MainForm : Form
         {
             var value = new AppSettings
             {
+                MaintenanceProfiles = _store.LoadSettings().MaintenanceProfiles,
+                PreUpgradeKeepCopies = _store.LoadSettings().PreUpgradeKeepCopies,
+                PreUpgradeBudgetMb = _store.LoadSettings().PreUpgradeBudgetMb,
+                OffsiteFolder = _store.LoadSettings().OffsiteFolder,
+                HealthHistoryDays = _store.LoadSettings().HealthHistoryDays,
+                CpuWarningPercent = _store.LoadSettings().CpuWarningPercent,
+                MemoryWarningPercent = _store.LoadSettings().MemoryWarningPercent,
+                TemperatureWarningC = _store.LoadSettings().TemperatureWarningC,
                 Theme = _themeChoice.SelectedItem?.ToString() ?? "Dark",
                 NavigationCollapsed = _navigationCollapsed,
                 DeviceDetailsWidth = _store.LoadSettings().DeviceDetailsWidth,
@@ -969,6 +982,7 @@ public sealed partial class MainForm : Form
     private async Task RunUpgradeAsync(List<RouterRecord> selected, FailureBehavior behavior, int retries, bool preserveProgress = false)
     {
         if (!await PreviewUpgradeAsync(selected, behavior, retries)) return;
+        if (_chosenProfile is { } profile) { behavior = profile.FailureBehavior; retries = profile.RetryCount; }
         SaveRouters();
         if (!preserveProgress)
         {
@@ -986,7 +1000,7 @@ public sealed partial class MainForm : Form
             _activeUpgrade = engine;
             engine.ConfirmGroupAsync = ConfirmGroupContinuationAsync;
             MaintenanceRunResult result = await Task.Run(
-                () => engine.RunSequentialAsync(selected, new UpgradeRunOptions(behavior, retries, _upgradeWindowEnd, _canaryPerGroup, _batchConcurrency, _batchFailureLimit, _restartBeforeUpgrade), token), token);
+                () => engine.RunSequentialAsync(selected, new UpgradeRunOptions(behavior, retries, _upgradeWindowEnd, _canaryPerGroup, _batchConcurrency, _batchFailureLimit, _restartBeforeUpgrade, _chosenProfile?.StabilitySeconds, _chosenProfile?.Channel ?? ""), token), token);
             FlushUiUpdates();
             MaintenanceReportFiles reports = await new MaintenanceReportService(_store).WriteAsync(result, token);
             string outcome = engine.PauseRequested && result.Routers.Count < selected.Count ? "Paused after active devices" : "Maintenance finished";
@@ -1042,8 +1056,9 @@ public sealed partial class MainForm : Form
             ScheduledLocalTime = BackupSchedulePolicy.Minute(_scheduleTime.Value),
             WindowEnd = _scheduleWindow.Checked ? _scheduleEnd.Value : null,
             RouterIds = selected.Select(x => x.Id).ToList(),
-            FailureBehavior = (FailureBehavior)(_failureBehavior.SelectedItem ?? FailureBehavior.RetryThenSkip),
-            RetryCount = (int)_retryCount.Value, MaxConcurrency = (int)_scheduleConcurrency.Value, RestartBeforeUpgrade = _scheduleRestartBeforeUpgrade
+            FailureBehavior = _scheduleProfile?.FailureBehavior ?? (FailureBehavior)(_failureBehavior.SelectedItem ?? FailureBehavior.RetryThenSkip),
+            RetryCount = _scheduleProfile?.RetryCount ?? (int)_retryCount.Value,
+            MaintenanceProfile = _scheduleProfile?.Name ?? "", StabilitySeconds = _scheduleProfile?.StabilitySeconds, ChannelOverride = _scheduleProfile?.Channel ?? "", FailureLimit = _scheduleProfile?.FailureLimit ?? 0, MaxConcurrency = (int)_scheduleConcurrency.Value, RestartBeforeUpgrade = _scheduleRestartBeforeUpgrade
         };
         try
         {

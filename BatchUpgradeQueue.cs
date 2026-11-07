@@ -8,10 +8,11 @@ internal static class BatchUpgradeQueue
         if (concurrency < 0 || failureLimit < 0) throw new ArgumentOutOfRangeException(nameof(concurrency));
         int slots = concurrency == 0 ? Math.Max(1, routers.Count) : Math.Max(1, concurrency);
         var active = new List<Task<RouterRunResult>>(); var results = new List<RouterRunResult>();
-        int next = 0, failures = 0;
+        var pending = routers.ToList(); int failures = 0;
+        DependencyPlan.Validate(routers);
         try
         {
-            while (next < routers.Count || active.Count > 0)
+            while (pending.Count > 0 || active.Count > 0)
             {
                 // Drain all finished tasks before opening another slot: observe failures first.
                 foreach (var finished in active.Where(t => t.IsCompleted).ToArray())
@@ -20,10 +21,13 @@ internal static class BatchUpgradeQueue
                     if (result.Result == "Failed") failures++;
                 }
                 bool stopped = ct.IsCancellationRequested || shouldStop() || failureLimit > 0 && failures >= failureLimit;
-                while (!stopped && next < routers.Count && active.Count < slots)
+                while (!stopped && pending.Count > 0 && active.Count < slots)
                 {
                     ct.ThrowIfCancellationRequested();
-                    active.Add(run(routers[next++]));
+                    var next = pending.FirstOrDefault(r => r.UpgradeAfter.All(id => results.Any(x => x.RouterId == id && x.Result == "Completed")));
+                    if (next is null) break;
+                    pending.Remove(next);
+                    active.Add(run(next));
                     if (active.Any(t => t.IsCompleted)) break;
                     stopped = shouldStop();
                 }

@@ -159,11 +159,13 @@ public sealed partial class MainForm
                 $"Channels: see each router row | Failure policy: {FriendlyBehavior(behavior)} | Retries: {retries}\n" +
                 "RouterOS target is resolved by the router at execution time; it is not pinned by this preview.\n" +
                 "Encrypted .backup and sensitive .rsc files are verified locally before each upgrade. Backup failure blocks that device. Bad HTTP response may trigger one DNS-verified recovery reboot. Files: ProgramData/MikroTik Manager/Backups/PreUpgrade.\n" +
-                "Parallel mode is for independent devices; keep upstream routers/switches in a separate job. Test mode processes one group at a time. Failed readiness checks block that router at execution." };
+                "Configured upgrade prerequisites must be included and complete successfully before their dependent device starts. Test mode processes one group at a time. Failed readiness checks block that router at execution." };
             var grid = new DataGridView { Dock = DockStyle.Fill, ReadOnly = true, AllowUserToAddRows = false,
                 AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.DisplayedCells, DataSource = rows };
             var actions = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = 45, FlowDirection = FlowDirection.RightToLeft };
             var controls = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = 64, AutoScroll = true };
+            var profiles = ProfileChoice();
+            _chosenProfile = null;
             var restart = new CheckBox { Text = "Restart before upgrade (after verified local backup)", AutoSize = true, Checked = false };
             var canary = new CheckBox { Text = "Test first router in each group; approve before continuing", AutoSize = true };
             var window = new CheckBox { Text = "Stop starting routers after", AutoSize = true };
@@ -171,7 +173,13 @@ public sealed partial class MainForm
             var concurrent = Numeric(_batchConcurrency, 0, 10000);
             var failures = Numeric(_batchFailureLimit, 0, 10000);
             controls.AutoSize = true; controls.AutoSizeMode = AutoSizeMode.GrowAndShrink;
-            controls.Controls.AddRange([new Label { Text = "Concurrent (0 = all)", AutoSize = true }, concurrent,
+            profiles.SelectedIndexChanged += (_, _) => {
+                _chosenProfile = profiles.SelectedItem as MaintenanceProfile;
+                if (_chosenProfile is not { } p) return;
+                concurrent.Value = p.MaxConcurrency; failures.Value = p.FailureLimit; restart.Checked = p.RestartBeforeUpgrade;
+                _failureBehavior.SelectedItem = p.FailureBehavior; _retryCount.Value = p.RetryCount;
+            };
+            controls.Controls.AddRange([new Label { Text = "Profile", AutoSize = true }, profiles, new Label { Text = "Concurrent (0 = all)", AutoSize = true }, concurrent,
                 new Label { Text = "Stop after failures (0 = policy only)", AutoSize = true }, failures, restart, canary, window, end]);
             actions.Controls.Add(new Button { Text = "Cancel", DialogResult = DialogResult.Cancel, AutoSize = true });
             actions.Controls.Add(new Button { Text = "Start Upgrade", DialogResult = DialogResult.OK, AutoSize = true });

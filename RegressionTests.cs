@@ -6,6 +6,7 @@ internal static class RegressionTests
 {
     public static async Task RunAsync()
     {
+        await Release080Tests.RunAsync();
         await PreUpgradeRestartTests.RunAsync();
         string directory = Path.Combine(Path.GetTempPath(), "MikroTikManager-tests-" + Guid.NewGuid().ToString("N"));
         var store = new SecureStore(directory);

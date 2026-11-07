@@ -32,8 +32,16 @@ public sealed partial class MainForm
         cutoff = new DateTimePicker { Format = DateTimePickerFormat.Custom, CustomFormat = "dd MMM yyyy  HH:mm", Dock = DockStyle.Fill, Value = _scheduleEnd.Value, Enabled = cutoffEnabled.Checked };
         var check = cutoffEnabled; var end = cutoff;
         check.CheckedChanged += (_, _) => end.Enabled = check.Checked;
+        var profiles = ProfileChoice(); _scheduleProfile = null;
+        AddRow(layout, "Maintenance profile", profiles);
         AddRow(layout, "Name", name); AddRow(layout, "Run at", start); AddRow(layout, "Concurrent (0 = all)", concurrent);
         restart = new CheckBox { Text = "Restart before upgrade (after local backup)", AutoSize = true };
+        var restartChoice = restart; var concurrencyChoice = concurrent;
+        profiles.SelectedIndexChanged += (_, _) => {
+            _scheduleProfile = profiles.SelectedItem as MaintenanceProfile;
+            if (_scheduleProfile is not { } p) return;
+            restartChoice.Checked = p.RestartBeforeUpgrade; concurrencyChoice.Value = p.MaxConcurrency;
+        };
         AddRow(layout, "", restart);
         AddRow(layout, "", cutoffEnabled); AddRow(layout, "Cutoff", cutoff);
         var note = new Label { Text = "BACKUP + UPGRADE: downloads and verifies local safety backups before upgrading (ProgramData/MikroTik Manager/Backups/PreUpgrade), upgrades RouterOS/firmware and may reboot devices. For local files without upgrades, use Create Backup Schedule. Parallel upgrades require independent devices.", AutoSize = true, Dock = DockStyle.Fill, Margin = new Padding(3, 12, 3, 12) };

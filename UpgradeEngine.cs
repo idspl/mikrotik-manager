@@ -25,6 +25,15 @@ public sealed class UpgradeEngine(SecureStore store, AppSettings settings)
         var queue = routers.DistinctBy(r => r.Id).ToList();
         if (queue.Where(r => !string.IsNullOrWhiteSpace(r.Host)).GroupBy(r => r.Host.Trim().ToLowerInvariant() + ":" + r.ApiPort).Any(g => g.Count() > 1))
             throw new InvalidOperationException("The selection contains duplicate API endpoints. Remove duplicate devices before upgrading.");
+        DependencyPlan.Validate(queue);
+        if (options.CanaryPerGroup && queue.Any(r => r.UpgradeAfter.Count > 0))
+            throw new InvalidOperationException("Use dependency ordering or test-per-group mode in a job, not both.");
+        if (options.StabilitySeconds is int stable) _settings.StableOnlineSeconds = Math.Clamp(stable, 0, 300);
+        if (!string.IsNullOrEmpty(options.ChannelOverride))
+        {
+            if (!RouterChannels.Allowed.Contains(options.ChannelOverride)) throw new InvalidOperationException("Invalid profile channel.");
+            _settings.UpdateChannel = options.ChannelOverride;
+        }
         var results = new List<RouterRunResult>();
         _history = new MaintenanceHistory { RouterIds = queue.Select(r => r.Id).ToList(), FailureBehavior = options.FailureBehavior, RetryCount = options.RetryCount };
         _history.Save(_store);
@@ -48,6 +57,8 @@ public sealed class UpgradeEngine(SecureStore store, AppSettings settings)
                 results.AddRange(await BatchUpgradeQueue.RunAsync(group, options.MaxConcurrency, remainingLimit, Stop,
                     r => RunOneAsync(r, options, cancellationToken), cancellationToken));
             }
+            foreach (var pending in queue.Where(r => results.All(done => done.RouterId != r.Id)))
+                Report(pending, "Not started", 0, 0, "Pending", "Prerequisite incomplete, failure limit, pause or cutoff; review before resuming");
             return new MaintenanceRunResult(runStarted, DateTime.Now, queue.Select(r => results.FirstOrDefault(x => x.RouterId == r.Id)).OfType<RouterRunResult>().ToList());
         }
         finally

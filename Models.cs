@@ -5,6 +5,10 @@ public sealed class RouterRecord
     public Guid Id { get; set; } = Guid.NewGuid();
     public string Name { get; set; } = "";
     public string Group { get; set; } = "";
+    public List<Guid> UpgradeAfter { get; set; } = [];
+    public List<DeviceHealth> HealthHistory { get; set; } = [];
+    public List<OpticalSample> OpticalHistory { get; set; } = [];
+    public string OffsiteStatus { get; set; } = "Not copied";
     public string Site { get; set; } = "";
     public string Tags { get; set; } = "";
     public DateTime? LastSeenAt { get; set; }
@@ -64,6 +68,9 @@ public sealed class UpgradeJob
     public string TypeLabel => Kind == ScheduledJobKind.Backup ? "Backup only" : "Backup + upgrade";
     public int EffectiveMaxConcurrency => Kind == ScheduledJobKind.Backup ? 0 : MaxConcurrency;
     public int FailureLimit { get; set; }
+    public string MaintenanceProfile { get; set; } = "";
+    public int? StabilitySeconds { get; set; }
+    public string ChannelOverride { get; set; } = "";
     public bool RestartBeforeUpgrade { get; set; }
 }
 
@@ -111,6 +118,14 @@ public sealed class AppSettings
     public bool RefreshRoutersAtStartup { get; set; } = true;
     public int InterfaceRecoverySeconds { get; set; } = 60;
     public int HealthPollMinutes { get; set; } = 0;
+    public int PreUpgradeKeepCopies { get; set; } = 0;
+    public int PreUpgradeBudgetMb { get; set; } = 0;
+    public string OffsiteFolder { get; set; } = "";
+    public int HealthHistoryDays { get; set; } = 7;
+    public int CpuWarningPercent { get; set; } = 85;
+    public int MemoryWarningPercent { get; set; } = 85;
+    public int TemperatureWarningC { get; set; } = 75;
+    public List<MaintenanceProfile> MaintenanceProfiles { get; set; } = [];
 }
 
 public sealed record ApiReply(string Type, IReadOnlyDictionary<string, string> Attributes);
@@ -128,9 +143,14 @@ public sealed record RouterHealthCheck(
     DateTime CheckedAt);
 
 public sealed record UpgradeRunOptions(FailureBehavior FailureBehavior, int RetryCount,
-    DateTime? WindowEnd = null, bool CanaryPerGroup = false, int MaxConcurrency = 1, int FailureLimit = 0, bool RestartBeforeUpgrade = false);
+    DateTime? WindowEnd = null, bool CanaryPerGroup = false, int MaxConcurrency = 1, int FailureLimit = 0, bool RestartBeforeUpgrade = false, int? StabilitySeconds = null, string ChannelOverride = "");
 public sealed record BackupHistoryEntry(DateTime CreatedAt, string BackupPath, string ExportPath,
-    string BackupHash, string ExportHash, string Verification);
+    string BackupHash, string ExportHash, string Verification)
+{
+    public string Model { get; init; } = "";
+    public string RouterOsVersion { get; init; } = "";
+    public string SerialNumber { get; init; } = "";
+}
 public sealed record RouterRunResult(
     Guid RouterId,
     string Router,
@@ -170,3 +190,16 @@ public sealed record MaintenanceProgressUpdate(
     string Message);
 
 public sealed record UpdateCheckResult(string Version, string Url, bool IsNewer);
+
+public sealed class MaintenanceProfile
+{
+    public string Name { get; set; } = "";
+    public int MaxConcurrency { get; set; } = 1;
+    public int FailureLimit { get; set; }
+    public FailureBehavior FailureBehavior { get; set; } = FailureBehavior.Stop;
+    public int RetryCount { get; set; } = 1;
+    public bool RestartBeforeUpgrade { get; set; }
+    public int StabilitySeconds { get; set; } = 10;
+    public string Channel { get; set; } = "";
+    public override string ToString() => Name;
+}

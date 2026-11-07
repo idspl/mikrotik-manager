@@ -82,7 +82,7 @@ public sealed partial class MainForm
             {
             var engine = CreateEngine(); _activeUpgrade = engine;
             var result = await Task.Run(() => engine.RunSequentialAsync(selected,
-                new UpgradeRunOptions(job.FailureBehavior, job.RetryCount, manualRun ? null : job.WindowEnd, MaxConcurrency: job.MaxConcurrency, FailureLimit: job.FailureLimit, RestartBeforeUpgrade: job.RestartBeforeUpgrade), _running.Token));
+                new UpgradeRunOptions(job.FailureBehavior, job.RetryCount, manualRun ? null : job.WindowEnd, MaxConcurrency: job.MaxConcurrency, FailureLimit: job.FailureLimit, RestartBeforeUpgrade: job.RestartBeforeUpgrade, StabilitySeconds: job.StabilitySeconds, ChannelOverride: job.ChannelOverride), _running.Token));
             await new MaintenanceReportService(_store).WriteAsync(result);
             job.State = result.Failed == 0 && result.Routers.Count == selected.Count ? "Completed"
                 : $"Finished: {result.Failed} failed; {selected.Count - result.Routers.Count} not processed";
