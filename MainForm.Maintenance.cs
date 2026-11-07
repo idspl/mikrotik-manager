@@ -12,7 +12,7 @@ public sealed partial class MainForm
     {
         var rows = progress.ToList();
         if (!rows.Any(x => x.Result == "Failed")) return [];
-        var pending = rows.Where(x => x.Result == "Pending" && x.Stage == "Queued" && x.Attempt == 0)
+        var pending = rows.Where(x => x.Result == "Pending" && (x.Stage == "Queued" || x.Stage == "Not started") && x.Attempt == 0)
             .Select(x => x.RouterId).ToHashSet();
         return queue.Where(pending.Contains).Distinct().ToList();
     }
@@ -31,7 +31,12 @@ public sealed partial class MainForm
         if (routers.Count == 0) { MessageBox.Show("No unstarted routers remain after the failed routers."); return; }
         // RunUpgradeAsync presents readiness, queue order, and cutoff/group controls
         // before starting. Failed, completed and interrupted routers are excluded.
-        await RunUpgradeAsync(routers, FailureBehavior.Skip, 0, preserveProgress: true);
+        var completed = _progressRows.Where(r => r.Result == "Completed").Select(r => r.RouterId).ToHashSet();
+        // Exclude dependents of failed/unselected prerequisites, including transitive chains.
+        bool removed;
+        do { var allowed = routers.Select(r => r.Id).Concat(completed).ToHashSet(); removed = routers.RemoveAll(r => r.UpgradeAfter.Any(id => !allowed.Contains(id))) > 0; } while (removed);
+        if (routers.Count == 0) { MessageBox.Show("All remaining devices depend on incomplete prerequisites. Retry those prerequisites first."); return; }
+        await RunUpgradeAsync(routers, FailureBehavior.Skip, 0, preserveProgress: true, completedPrerequisites: completed);
     }
 
     private void PauseAfterRouter(object? sender, EventArgs e)
@@ -118,7 +123,7 @@ public sealed partial class MainForm
         {
             HistoryStage? stage = run.Stages.LastOrDefault(x => x.RouterId == row.RouterId);
             row.Result = run.CompletedIds.Contains(row.RouterId) ? "Completed" : stage is null ? "Pending"
-                : stage.Result is "Failed" or "Cancelled" ? stage.Result : "Interrupted";
+                : stage.Result is "Failed" or "Cancelled" or "Pending" ? stage.Result : "Interrupted";
             row.Progress = row.Result == "Completed" ? 100 : 0;
             row.Stage = stage?.Stage ?? "Queued";
             row.Message = stage?.Message ?? "Not started";
@@ -137,7 +142,7 @@ public sealed partial class MainForm
         try
         {
             var rows = new System.Data.DataTable();
-            foreach (string column in new[] { "Order", "Router", "Group", "Address", "Channel", "RouterOS", "Firmware", "Available firmware", "Ready", "Storage", "Detail" })
+            foreach (string column in new[] { "Order", "Router", "Group", "Address", "Channel", "RouterOS", "Firmware", "Available firmware", "Ready", "Storage", "Upgrade after", "Detail" })
                 rows.Columns.Add(column);
             var engine = new UpgradeEngine(_store, _store.LoadSettings());
             using var slots = new SemaphoreSlim(8);
@@ -152,18 +157,20 @@ public sealed partial class MainForm
                 var router = health.Router;
                 rows.Rows.Add(++order, router.Name, router.Group, router.Host, RouterChannels.Resolve(router, _store.LoadSettings()),
                     health.Snapshot?.RouterOsVersion ?? "Unknown", health.Snapshot?.CurrentFirmware ?? "Unknown",
-                    health.Snapshot?.UpgradeFirmware ?? "Not applicable", health.Passed, router.StorageStatus, health.Summary);
+                    health.Snapshot?.UpgradeFirmware ?? "Not applicable", health.Passed, router.StorageStatus, string.Join(", ", router.UpgradeAfter.Select(id => _routers.FirstOrDefault(r => r.Id == id)?.Name ?? "Missing device")), health.Summary);
             }
-            using var dialog = new DpiDialog { Text = "Upgrade Preview — confirm exact queue order", Width = 1100, Height = 550, StartPosition = FormStartPosition.CenterParent };
+            using var dialog = new DpiDialog { Text = "Upgrade Preview — review devices and execution settings", Width = 1100, Height = 550, StartPosition = FormStartPosition.CenterParent };
             var info = new Label { Dock = DockStyle.Top, Height = 100, Padding = new Padding(10), Text =
                 $"Channels: see each router row | Failure policy: {FriendlyBehavior(behavior)} | Retries: {retries}\n" +
                 "RouterOS target is resolved by the router at execution time; it is not pinned by this preview.\n" +
                 "Encrypted .backup and sensitive .rsc files are verified locally before each upgrade. Backup failure blocks that device. Bad HTTP response may trigger one DNS-verified recovery reboot. Files: ProgramData/MikroTik Manager/Backups/PreUpgrade.\n" +
-                "Parallel mode is for independent devices; keep upstream routers/switches in a separate job. Test mode processes one group at a time. Failed readiness checks block that router at execution." };
+                "Configured upgrade prerequisites must be included and complete successfully before their dependent device starts. Test mode processes one group at a time. Failed readiness checks block that router at execution." };
             var grid = new DataGridView { Dock = DockStyle.Fill, ReadOnly = true, AllowUserToAddRows = false,
                 AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.DisplayedCells, DataSource = rows };
             var actions = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = 45, FlowDirection = FlowDirection.RightToLeft };
             var controls = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = 64, AutoScroll = true };
+            var profiles = ProfileChoice();
+            _chosenProfile = null;
             var restart = new CheckBox { Text = "Restart before upgrade (after verified local backup)", AutoSize = true, Checked = false };
             var canary = new CheckBox { Text = "Test first router in each group; approve before continuing", AutoSize = true };
             var window = new CheckBox { Text = "Stop starting routers after", AutoSize = true };
@@ -171,7 +178,17 @@ public sealed partial class MainForm
             var concurrent = Numeric(_batchConcurrency, 0, 10000);
             var failures = Numeric(_batchFailureLimit, 0, 10000);
             controls.AutoSize = true; controls.AutoSizeMode = AutoSizeMode.GrowAndShrink;
-            controls.Controls.AddRange([new Label { Text = "Concurrent (0 = all)", AutoSize = true }, concurrent,
+            profiles.SelectedIndexChanged += (_, _) => {
+                _chosenProfile = profiles.SelectedItem as MaintenanceProfile;
+                for (int i = 0; i < selected.Count; i++) rows.Rows[i]["Channel"] = selected[i].UpdateChannel.Length > 0 ? selected[i].UpdateChannel : _chosenProfile?.Channel.Length > 0 ? _chosenProfile.Channel : _store.LoadSettings().UpdateChannel;
+                if (_chosenProfile is not { } p) return;
+                info.Text = $"Profile: {p.Name} | Failure policy: {FriendlyBehavior(p.FailureBehavior)} | Retries: {p.RetryCount} | Stability: {p.StabilitySeconds}s\n" +
+                    "Per-device channels take precedence. Local backups must verify before upgrading. Configured prerequisites run first; their dependents require successful completion.";
+                SizeUpgradeNotice();
+                concurrent.Value = p.MaxConcurrency; failures.Value = p.FailureLimit; restart.Checked = p.RestartBeforeUpgrade;
+                _failureBehavior.SelectedItem = p.FailureBehavior; _retryCount.Value = p.RetryCount;
+            };
+            controls.Controls.AddRange([new Label { Text = "Profile", AutoSize = true }, profiles, new Label { Text = "Concurrent (0 = all)", AutoSize = true }, concurrent,
                 new Label { Text = "Stop after failures (0 = policy only)", AutoSize = true }, failures, restart, canary, window, end]);
             actions.Controls.Add(new Button { Text = "Cancel", DialogResult = DialogResult.Cancel, AutoSize = true });
             actions.Controls.Add(new Button { Text = "Start Upgrade", DialogResult = DialogResult.OK, AutoSize = true });

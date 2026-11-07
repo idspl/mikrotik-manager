@@ -51,6 +51,16 @@ public sealed class SecureStore
     public List<UpgradeJob> LoadJobs() => LoadProtected<List<UpgradeJob>>(JobsPath) ?? [];
     public void SaveJobs(List<UpgradeJob> jobs) => SaveProtected(JobsPath, jobs);
 
+    private string SamplesPath(Guid id, string kind)
+    {
+        string folder = Path.Combine(RootDirectory, "HealthHistory"); Directory.CreateDirectory(folder);
+        return Path.Combine(folder, id.ToString("N") + "-" + kind + ".dat");
+    }
+    internal List<DeviceHealth> LoadHealthSamples(Guid id) => LoadProtected<List<DeviceHealth>>(SamplesPath(id, "resources")) ?? [];
+    internal List<OpticalSample> LoadOpticalSamples(Guid id) => LoadProtected<List<OpticalSample>>(SamplesPath(id, "optics")) ?? [];
+    internal void SaveHealthSamples(RouterRecord router) => SaveProtected(SamplesPath(router.Id, "resources"), router.HealthHistory);
+    internal void SaveOpticalSamples(RouterRecord router) => SaveProtected(SamplesPath(router.Id, "optics"), router.OpticalHistory);
+
     public AppSettings LoadSettings()
     {
         lock (FileAccessLock)

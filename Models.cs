@@ -5,6 +5,12 @@ public sealed class RouterRecord
     public Guid Id { get; set; } = Guid.NewGuid();
     public string Name { get; set; } = "";
     public string Group { get; set; } = "";
+    public List<Guid> UpgradeAfter { get; set; } = [];
+    [System.Text.Json.Serialization.JsonIgnore]
+    public List<DeviceHealth> HealthHistory { get; set; } = [];
+    [System.Text.Json.Serialization.JsonIgnore]
+    public List<OpticalSample> OpticalHistory { get; set; } = [];
+    public string OffsiteStatus { get; set; } = "Not copied";
     public string Site { get; set; } = "";
     public string Tags { get; set; } = "";
     public DateTime? LastSeenAt { get; set; }
@@ -64,6 +70,9 @@ public sealed class UpgradeJob
     public string TypeLabel => Kind == ScheduledJobKind.Backup ? "Backup only" : "Backup + upgrade";
     public int EffectiveMaxConcurrency => Kind == ScheduledJobKind.Backup ? 0 : MaxConcurrency;
     public int FailureLimit { get; set; }
+    public string MaintenanceProfile { get; set; } = "";
+    public int? StabilitySeconds { get; set; }
+    public string ChannelOverride { get; set; } = "";
     public bool RestartBeforeUpgrade { get; set; }
 }
 
@@ -111,11 +120,19 @@ public sealed class AppSettings
     public bool RefreshRoutersAtStartup { get; set; } = true;
     public int InterfaceRecoverySeconds { get; set; } = 60;
     public int HealthPollMinutes { get; set; } = 0;
+    public int PreUpgradeKeepCopies { get; set; } = 0;
+    public int PreUpgradeBudgetMb { get; set; } = 0;
+    public string OffsiteFolder { get; set; } = "";
+    public int HealthHistoryDays { get; set; } = 7;
+    public int CpuWarningPercent { get; set; } = 85;
+    public int MemoryWarningPercent { get; set; } = 85;
+    public int TemperatureWarningC { get; set; } = 75;
+    public List<MaintenanceProfile> MaintenanceProfiles { get; set; } = [];
 }
 
 public sealed record ApiReply(string Type, IReadOnlyDictionary<string, string> Attributes);
 public sealed record RouterSnapshot(string Identity, string Model, string RouterOsVersion, string CurrentFirmware, string UpgradeFirmware);
-public sealed record BulkBackupResult(int Successful, int Failed, string Folder, int Verified);
+public sealed record BulkBackupResult(int Successful, int Failed, string Folder, int Verified, int OffsiteFailures = 0);
 public sealed record RouterHealthCheck(
     RouterRecord Router,
     bool Passed,
@@ -128,9 +145,14 @@ public sealed record RouterHealthCheck(
     DateTime CheckedAt);
 
 public sealed record UpgradeRunOptions(FailureBehavior FailureBehavior, int RetryCount,
-    DateTime? WindowEnd = null, bool CanaryPerGroup = false, int MaxConcurrency = 1, int FailureLimit = 0, bool RestartBeforeUpgrade = false);
+    DateTime? WindowEnd = null, bool CanaryPerGroup = false, int MaxConcurrency = 1, int FailureLimit = 0, bool RestartBeforeUpgrade = false, int? StabilitySeconds = null, string ChannelOverride = "", IReadOnlySet<Guid>? CompletedPrerequisites = null, IReadOnlyList<Guid>? OriginalQueue = null);
 public sealed record BackupHistoryEntry(DateTime CreatedAt, string BackupPath, string ExportPath,
-    string BackupHash, string ExportHash, string Verification);
+    string BackupHash, string ExportHash, string Verification)
+{
+    public string Model { get; init; } = "";
+    public string RouterOsVersion { get; init; } = "";
+    public string SerialNumber { get; init; } = "";
+}
 public sealed record RouterRunResult(
     Guid RouterId,
     string Router,
@@ -170,3 +192,24 @@ public sealed record MaintenanceProgressUpdate(
     string Message);
 
 public sealed record UpdateCheckResult(string Version, string Url, bool IsNewer);
+
+public sealed class MaintenanceProfile
+{
+    [System.ComponentModel.DisplayName("Profile name")]
+    public string Name { get; set; } = "";
+    [System.ComponentModel.DisplayName("Concurrent devices (0 = all)")]
+    public int MaxConcurrency { get; set; } = 1;
+    [System.ComponentModel.DisplayName("Stop after failures (0 = policy)")]
+    public int FailureLimit { get; set; }
+    [System.ComponentModel.DisplayName("Failure policy")]
+    public FailureBehavior FailureBehavior { get; set; } = FailureBehavior.Stop;
+    [System.ComponentModel.DisplayName("Retry count")]
+    public int RetryCount { get; set; } = 1;
+    [System.ComponentModel.DisplayName("Restart before upgrade")]
+    public bool RestartBeforeUpgrade { get; set; }
+    [System.ComponentModel.DisplayName("Stability wait (seconds)")]
+    public int StabilitySeconds { get; set; } = 10;
+    [System.ComponentModel.DisplayName("Default channel (blank = app default)")]
+    public string Channel { get; set; } = "";
+    public override string ToString() => Name;
+}

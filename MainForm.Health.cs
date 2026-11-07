@@ -8,7 +8,7 @@ public sealed partial class MainForm
     private DateTime _lastHealthPoll = DateTime.MinValue;
     private TabPage _healthPage = null!;
     private sealed record HealthRow(Guid Id, string Device, string Status, string CPU, string MemoryUsed, string FreeStorage, string Uptime, string Temperature,
-        DateTime? LastCheck, DateTime? ReadingAt, string Detail);
+        DateTime? LastCheck, DateTime? ReadingAt, string Detail, string Thresholds);
 
     private TabPage BuildHealthPage()
     {
@@ -19,13 +19,19 @@ public sealed partial class MainForm
                 await RefreshHealthAsync(_routers.Where(r => ids.Contains(r.Id)).ToList());
             }));
         var selection = ToolbarMenu("Selection", MenuAction("Select All", (_, _) => _healthGrid.SelectAll()), MenuAction("Clear Selection", (_, _) => _healthGrid.ClearSelection()));
-        var actions = PageToolbar("Health", refresh, selection, ToolbarAction("Device Details", (_, _) => {
+        var actions = PageToolbar("Health", refresh, selection, ToolbarAction("History / Trends", (_, _) => ShowHealthHistory()), ToolbarAction("Device Details", (_, _) => {
             if (_healthGrid.CurrentRow?.DataBoundItem is HealthRow row && _routers.FirstOrDefault(r => r.Id == row.Id) is RouterRecord router) ShowDeviceDetails(router);
         }), ToolbarAction("Settings", (_, _) => _tabs.SelectedTab = _tabs.TabPages.Cast<TabPage>().Single(t => t.Text == "Settings")),
             ToolbarAction("Cancel Refresh", (_, _) => { if (_healthRefreshing) _running?.Cancel(); }));
         _healthGrid.Dock = DockStyle.Fill; _healthGrid.ReadOnly = true; _healthGrid.AllowUserToAddRows = false;
         _healthGrid.SelectionMode = DataGridViewSelectionMode.FullRowSelect; _healthGrid.MultiSelect = true;
         _healthGrid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill; StyleGrid(_healthGrid);
+        _healthGrid.CellFormatting += (_, e) => {
+            if (e.RowIndex < 0 || _healthGrid.Columns[e.ColumnIndex].Name != "Thresholds") return;
+            if (_healthGrid.Rows[e.RowIndex].DataBoundItem is HealthRow r && r.Thresholds.StartsWith("High")) {
+                e.CellStyle.BackColor = Color.FromArgb(95, 69, 24); e.CellStyle.ForeColor = Color.FromArgb(255, 213, 122);
+            }
+        };
         page.Controls.Add(_healthGrid); page.Controls.Add(_healthSummary); page.Controls.Add(actions);
         page.SizeChanged += (_, _) => _healthSummary.MaximumSize = new Size(Math.Max(100, page.ClientSize.Width), 0);
         _tabs.SelectedIndexChanged += (_, _) => { if (_tabs.SelectedTab == page) RefreshHealthView(); };
@@ -52,6 +58,7 @@ public sealed partial class MainForm
         int completed = 0;
         try
         {
+            await Task.Run(() => { foreach (var r in routers) r.HealthHistory = _store.LoadHealthSamples(r.Id); });
             await HealthMonitor.PollAsync(routers, _store.LoadSettings(), () => {
                 _status.Text = $"Health: {++completed} / {routers.Count} checked"; RequestInventoryPaint();
             }, _running.Token);
@@ -61,7 +68,7 @@ public sealed partial class MainForm
         finally
         {
             _lastHealthPoll = DateTime.Now;
-            try { SaveRouters(); } catch (Exception ex) { ShowError(ex); }
+            try { await Task.Run(() => { foreach (var r in routers) _store.SaveHealthSamples(r); }); SaveRouters(); } catch (Exception ex) { ShowError(ex); }
             RefreshHealthView(); RefreshDashboard(); RequestInventoryPaint();
             _running.Dispose(); _running = null; _healthRefreshing = false; SetBusy(false, $"Health refresh finished: {completed} / {routers.Count}");
         }
@@ -74,7 +81,7 @@ public sealed partial class MainForm
             var h = r.Health;
             string memory = h?.TotalMemory is > 0 && h.FreeMemory is not null ? $"{100d * (h.TotalMemory - h.FreeMemory) / h.TotalMemory:0.0}%" : "Unavailable";
             return new HealthRow(r.Id, r.Name, HealthMonitor.Status(r, DateTime.Now, interval), h?.CpuPercent is double cpu ? $"{cpu:0.#}%" : "Unavailable",
-                memory, HealthMonitor.Size(h?.FreeStorage), h?.Uptime ?? "Unavailable", h?.Temperature ?? "Unavailable", r.LastHealthCheckAt, h?.CheckedAt, r.LastHealthError);
+                memory, HealthMonitor.Size(h?.FreeStorage), h?.Uptime ?? "Unavailable", h?.Temperature ?? "Unavailable", r.LastHealthCheckAt, h?.CheckedAt, r.LastHealthError, HealthHistory.Warnings(h, _store.LoadSettings()));
         }).ToList();
         _healthSummary.Text = $"{rows.Count(r => r.Status == "Online")} online • {rows.Count(r => r.Status == "Offline")} offline • {rows.Count(r => r.Status == "Stale")} stale • {rows.Count(r => r.Status == "Not checked")} not checked\n" +
             (interval == 0 ? "Automatic polling off" : $"Checks every {interval} minutes while the app is open; deferred during maintenance") + ". Reading time identifies retained values after a failed check.";

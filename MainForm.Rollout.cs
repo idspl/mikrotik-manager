@@ -75,14 +75,14 @@ public sealed partial class MainForm
             {
                 var backup = await ScheduledBackupRunner.RunAsync(_store, _store.LoadSettings(), job, selected, AppendLog,
                     update => UpdateProgress(update), _running.Token);
-                job.State = backup.Failed == 0 ? "Completed" : $"Completed with {backup.Failed} backup failures";
-                backupSummary = job.LastRunResult = $"Backup: {backup.Successful} successful, {backup.Failed} failed; {backup.Folder}";
+                job.State = backup.Failed == 0 && backup.OffsiteFailures == 0 ? "Completed" : $"Completed with {backup.Failed} backup failures and {backup.OffsiteFailures} offsite failures";
+                backupSummary = job.LastRunResult = $"Backup: {backup.Successful} successful, {backup.Failed} failed; {backup.OffsiteFailures} offsite failures; {backup.Folder}";
             }
             else
             {
             var engine = CreateEngine(); _activeUpgrade = engine;
             var result = await Task.Run(() => engine.RunSequentialAsync(selected,
-                new UpgradeRunOptions(job.FailureBehavior, job.RetryCount, manualRun ? null : job.WindowEnd, MaxConcurrency: job.MaxConcurrency, FailureLimit: job.FailureLimit, RestartBeforeUpgrade: job.RestartBeforeUpgrade), _running.Token));
+                new UpgradeRunOptions(job.FailureBehavior, job.RetryCount, manualRun ? null : job.WindowEnd, MaxConcurrency: job.MaxConcurrency, FailureLimit: job.FailureLimit, RestartBeforeUpgrade: job.RestartBeforeUpgrade, StabilitySeconds: job.StabilitySeconds, ChannelOverride: job.ChannelOverride), _running.Token));
             await new MaintenanceReportService(_store).WriteAsync(result);
             job.State = result.Failed == 0 && result.Routers.Count == selected.Count ? "Completed"
                 : $"Finished: {result.Failed} failed; {selected.Count - result.Routers.Count} not processed";

@@ -54,6 +54,7 @@ internal static class HealthMonitor
                 try
                 {
                     router.Health = await (read ?? ReadAsync)(router, settings, timeout.Token);
+                    HealthHistory.Record(router, settings);
                     router.LastHealthError = ""; router.ApiStatus = "Online"; router.LastSeenAt = DateTime.Now;
                 }
                 catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }

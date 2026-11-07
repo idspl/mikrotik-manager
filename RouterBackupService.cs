@@ -36,6 +36,7 @@ public sealed class RouterBackupService(AppSettings settings, int? retentionDays
             string verification = "Not verified";
             long backupBytes = 0, exportBytes = 0;
             string backupHash = "", exportHash = "";
+            BackupIdentity identity = new(router.Model, router.RouterOsVersion, "");
 
             if (string.IsNullOrEmpty(router.BackupPassword))
                 router.BackupPassword = Convert.ToHexString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(18));
@@ -47,7 +48,7 @@ public sealed class RouterBackupService(AppSettings settings, int? retentionDays
                 if (DownloadOverride is not null)
                     await DownloadOverride(router, localBackup, localExport, timeout.Token);
                 else
-                    await DownloadAsync(router, remoteStem, localBackup, localExport, timeout.Token);
+                    identity = await DownloadAsync(router, remoteStem, localBackup, localExport, timeout.Token);
                 (backupBytes, backupHash) = await VerifyFileAsync(localBackup, timeout.Token);
                 (exportBytes, exportHash) = await VerifyFileAsync(localExport, timeout.Token);
                 verification = "Verified size and SHA-256";
@@ -56,7 +57,7 @@ public sealed class RouterBackupService(AppSettings settings, int? retentionDays
                 catch (Exception) { router.BackupChange = "Comparison unavailable"; }
                 router.BackupChangeAt = DateTime.Now;
                 router.Backups.Add(new BackupHistoryEntry(DateTime.Now, localBackup, localExport,
-                    backupHash, exportHash, verification));
+                    backupHash, exportHash, verification) { Model = identity.Model, RouterOsVersion = identity.Version, SerialNumber = identity.Serial });
                 Interlocked.Increment(ref verified);
                 router.LastStatus = "Backup downloaded";
                 result = "Success";
@@ -96,16 +97,32 @@ public sealed class RouterBackupService(AppSettings settings, int? retentionDays
         await Task.WhenAll(routers.DistinctBy(r => r.Id).Select(BackupOneAsync));
         cancellationToken.ThrowIfCancellationRequested();
         // Do not delete earlier recovery copies when the replacement run failed.
-        if (failed == 0 && successful > 0) await Task.Run(() => CleanupExpiredBackups(parentFolder));
-        return new BulkBackupResult(successful, failed, outputFolder, verified);
+        bool copied = true;
+        if (successful > 0 && !string.IsNullOrWhiteSpace(_settings.OffsiteFolder))
+        {
+            string status;
+            try { status = await RecoveryFiles.CopyOffsiteAsync(outputFolder, _settings.OffsiteFolder, cancellationToken); }
+            catch (OperationCanceledException) { throw; }
+            catch (Exception ex) { copied = false; status = "Offsite copy failed: " + ex.Message; }
+            foreach (var router in routers) { router.OffsiteStatus = router.LastBackupError.Length == 0 ? status : "Not copied: local backup failed"; Log(router, router.OffsiteStatus); }
+        }
+        if (failed == 0 && successful > 0 && copied) await Task.Run(() => CleanupExpiredBackups(parentFolder));
+        return new BulkBackupResult(successful, failed, outputFolder, verified, copied ? 0 : successful);
     }
 
-    private async Task DownloadAsync(RouterRecord router, string remoteStem, string localBackup, string localExport, CancellationToken ct)
+    private sealed record BackupIdentity(string Model, string Version, string Serial);
+
+    private async Task<BackupIdentity> DownloadAsync(RouterRecord router, string remoteStem, string localBackup, string localExport, CancellationToken ct)
     {
         router.LastStatus = "Creating API backup";
         Log(router, "Connecting to API");
         await using RouterOsApiClient api = await RouterOsApiClient.ConnectAsync(router, _settings, ct);
         router.ApiStatus = "Online"; router.LastSeenAt = DateTime.Now;
+        var resource = (await api.ExecuteAsync("/system/resource/print", ct)).First(r => r.Type == "!re").Attributes;
+        string serial = "";
+        try { serial = (await api.ExecuteAsync("/system/routerboard/print", ct)).FirstOrDefault(r => r.Type == "!re")?.Attributes.GetValueOrDefault("serial-number") ?? ""; }
+        catch (RouterOsApiException) { }
+        var identity = new BackupIdentity(resource.GetValueOrDefault("board-name") ?? router.Model, resource.GetValueOrDefault("version") ?? "", serial);
         try
         {
             try { await api.ExecuteAsync("/system/backup/save", ct, $"name={remoteStem}", $"password={router.BackupPassword}", "encryption=aes-sha256"); }
@@ -119,6 +136,7 @@ public sealed class RouterBackupService(AppSettings settings, int? retentionDays
             await api.DownloadFileAsync(remoteStem + ".rsc", localExport, ct);
             await VerifyFileAsync(localBackup, ct);
             await VerifyFileAsync(localExport, ct);
+            return identity;
         }
         finally
         {

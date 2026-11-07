@@ -20,6 +20,9 @@ internal sealed class UpgradeBackupService(SecureStore store, AppSettings settin
             ct.ThrowIfCancellationRequested();
             if (result.Successful != 1 || result.Failed != 0 || result.Verified != 1)
                 throw new IOException("Upgrade blocked: local recovery backup was not verified. " + router.LastBackupError);
+            string cleanup = router.OffsiteStatus.StartsWith("Offsite copy failed:") ? "Cleanup skipped: offsite transfer failed" : await RecoveryFiles.PruneAsync(router, Path.Combine(RootFolder(store), router.Id.ToString("N")),
+                settings.PreUpgradeKeepCopies, settings.PreUpgradeBudgetMb, ct);
+            message?.Invoke(cleanup);
             return result.Folder;
         }
         finally { Persist(router); }
@@ -40,6 +43,7 @@ internal sealed class UpgradeBackupService(SecureStore store, AppSettings settin
             target.LastBackupError = router.LastBackupError;
             target.BackupChange = router.BackupChange;
             target.BackupChangeAt = router.BackupChangeAt;
+            target.OffsiteStatus = router.OffsiteStatus;
             store.SaveRouters(saved);
         }
     }

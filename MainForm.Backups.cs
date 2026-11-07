@@ -6,12 +6,14 @@ public sealed partial class MainForm
     private readonly Label _backupCoverage = new() { Dock = DockStyle.Top, AutoSize = false, Padding = new Padding(15), Text = "Refresh coverage to check local backup files and schedules." };
     private bool _readingCoverage;
     private readonly ToolStripLabel _backupSelection = new("0 selected") { Alignment = ToolStripItemAlignment.Right };
-    private sealed record BackupCoverageRow(Guid Id, string Device, string Site, string Coverage, DateTime? LastBackup, DateTime? LastAttempt, string Error, string Change, DateTime? ComparedAt);
+    private sealed record BackupCoverageRow(Guid Id, string Device, string Site, string Coverage, DateTime? LastBackup, DateTime? LastAttempt, string Error, string Change, DateTime? ComparedAt, string Offsite);
 
     private TabPage BuildBackupsPage()
     {
         var page = new TabPage("Backups");
         var actions = new ToolStripDropDownButton("Actions");
+        actions.DropDownItems.Add("Guided Restore…", null, ShowGuidedRestore);
+        actions.DropDownItems.Add("Recovery Storage Settings…", null, ConfigureRecovery);
         actions.DropDownItems.Add("Retry Failed Backups", null, async (_, _) => {
             var selection = SelectedBackupRouters();
             var failed = (selection.Count == 0 ? _routers.ToList() : selection).Where(r => r.LastBackupError.Length > 0 && r.LastBackupError != "Cancelled").ToList();
@@ -85,7 +87,7 @@ public sealed partial class MainForm
         try
         {
             // Snapshot mutable inventory on the UI thread; file probes run in the background.
-            var snapshots = _routers.Select(r => new { r.Id, r.Name, r.Site, Last = r.Backups.LastOrDefault(), r.LastBackupAttemptAt, r.LastBackupError, r.BackupChange, r.BackupChangeAt }).ToList();
+            var snapshots = _routers.Select(r => new { r.Id, r.Name, r.Site, Last = r.Backups.LastOrDefault(), r.LastBackupAttemptAt, r.LastBackupError, r.BackupChange, r.BackupChangeAt, r.OffsiteStatus }).ToList();
             var schedules = _jobs.Where(j => j.Kind == ScheduledJobKind.Backup && j.State is "Scheduled" or "Running").Select(j => new { Ids = j.RouterIds.ToArray(), j.ScheduledLocalTime, j.State }).ToList();
             TraceCoverage("snapshot ready");
             var rows = await Task.Run(() => snapshots.Select(r => {
@@ -95,7 +97,7 @@ public sealed partial class MainForm
                 if (jobs.Count == 0) issues.Add("No active schedule");
                 if (jobs.Any(j => j.State == "Scheduled" && j.ScheduledLocalTime < DateTime.Now)) issues.Add("Overdue");
                 if (!string.IsNullOrEmpty(r.LastBackupError)) issues.Add("Last backup failed");
-                return new BackupCoverageRow(r.Id, r.Name, r.Site, issues.Count == 0 ? "Covered" : string.Join("; ", issues), r.Last?.CreatedAt, r.LastBackupAttemptAt, r.LastBackupError, r.BackupChange, r.BackupChangeAt);
+                return new BackupCoverageRow(r.Id, r.Name, r.Site, issues.Count == 0 ? "Covered" : string.Join("; ", issues), r.Last?.CreatedAt, r.LastBackupAttemptAt, r.LastBackupError, r.BackupChange, r.BackupChangeAt, r.OffsiteStatus);
             }).ToList());
             TraceCoverage("file checks completed");
             if (IsDisposed) return;

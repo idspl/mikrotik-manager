@@ -16,6 +16,7 @@ public sealed partial class MainForm
         edited.Site = router.Site; edited.Tags = router.Tags; edited.LastSeenAt = router.LastSeenAt;
         edited.LastBackupAttemptAt = router.LastBackupAttemptAt; edited.LastBackupError = router.LastBackupError;
         edited.BackupChange = router.BackupChange; edited.BackupChangeAt = router.BackupChangeAt; edited.LastBackupFolder = router.LastBackupFolder;
+        edited.UpgradeAfter = router.UpgradeAfter; edited.HealthHistory = router.HealthHistory; edited.OpticalHistory = router.OpticalHistory; edited.OffsiteStatus = router.OffsiteStatus;
         edited.Id = router.Id; edited.BackupPassword = router.BackupPassword; edited.Backups = router.Backups;
         if (edited.Host == router.Host && edited.ApiPort == router.ApiPort)
         {
