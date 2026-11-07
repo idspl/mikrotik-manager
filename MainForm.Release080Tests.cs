@@ -15,7 +15,7 @@ public sealed partial class MainForm
                         throw new Exception("New dialog footer clips: " + name + " / " + scale);
             foreach (var grid in form.Controls.OfType<DataGridView>())
                 if (grid.ColumnHeadersHeight < grid.Font.Height || grid.Rows.Cast<DataGridViewRow>().Any(r => r.Height < grid.Font.Height + 4))
-                    throw new Exception("New dialog table clips at " + scale);
+                    throw new Exception($"New dialog table clips at {scale}: header={grid.ColumnHeadersHeight}, font={grid.Font.Height}, rows={string.Join(",", grid.Rows.Cast<DataGridViewRow>().Select(r => r.Height))}");
             if (scale == 1.5F)
             {
                 using var bitmap = new Bitmap(form.Width, form.Height); form.DrawToBitmap(bitmap, new Rectangle(Point.Empty, bitmap.Size));

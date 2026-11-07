@@ -83,6 +83,6 @@ public sealed partial class MainForm
             if (restoreRequested) { router.LastStatus = "Restore outcome uncertain — verify manually"; MessageBox.Show(this, "Restore outcome is uncertain. Do not repeat the request until you have checked the router. " + ex.Message); }
             else ShowError(ex);
         }
-        finally { SaveRouters(); _running.Dispose(); _running = null; SetBusy(false, "Ready"); }
+        finally { try { SaveRouters(); } catch (Exception ex) { ShowError(ex); } finally { _running.Dispose(); _running = null; SetBusy(false, "Ready"); } }
     }
 }

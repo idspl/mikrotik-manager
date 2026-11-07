@@ -92,6 +92,8 @@ internal sealed class ServiceActivityForm : DpiDialog
         var status = new Label { Dock = DockStyle.Top, AutoSize = true, Padding = new Padding(12) };
         var grid = new SmoothGrid { Dock = DockStyle.Fill, ReadOnly = true, AllowUserToAddRows = false, AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.DisplayedCells };
         MainForm.StyleGrid(grid);
+        void SizeTable() { grid.ColumnHeadersDefaultCellStyle.Font = new Font(grid.Font, FontStyle.Bold); grid.UpdateRowMetrics(); }
+        grid.FontChanged += (_, _) => SizeTable(); SizeTable();
         grid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
         SizeChanged += (_, _) => status.MaximumSize = new Size(Math.Max(100, ClientSize.Width), 0);
         var bar = new FlowLayoutPanel { Dock = DockStyle.Bottom, AutoSize = true, Padding = new Padding(12) };

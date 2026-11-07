@@ -77,6 +77,8 @@ public sealed partial class MainForm
         foreach (string port in router.OpticalHistory.Select(h => h.Port).Distinct().Order()) { selector.Items.Add("RX • " + port); selector.Items.Add("TX • " + port); }
         var plot = new HistoryPlot(); var grid = new SmoothGrid { Dock = DockStyle.Fill, ReadOnly = true, AllowUserToAddRows = false, AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.DisplayedCells };
         StyleGrid(grid);
+        void SizeTable() { grid.ColumnHeadersDefaultCellStyle.Font = new Font(grid.Font, FontStyle.Bold); grid.UpdateRowMetrics(); }
+        grid.FontChanged += (_, _) => SizeTable(); SizeTable();
         var split = new SplitContainer { Dock = DockStyle.Fill, Orientation = Orientation.Horizontal }; split.Panel1.Controls.Add(plot); split.Panel2.Controls.Add(grid);
         var bar = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, Padding = new Padding(12) }; bar.Controls.Add(selector);
         bar.Controls.Add(new Label { AutoSize = true, Text = "Health is sampled while open; optics are retained when a port is read. No notifications." });
